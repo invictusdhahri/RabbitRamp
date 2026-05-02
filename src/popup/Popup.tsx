@@ -233,6 +233,25 @@ export function Popup() {
     chrome.tabs.update(tabId, { url: homeUrl });
   }
 
+  function stopQueue() {
+    chrome.runtime.sendMessage({ type: "QUEUE_STOP" } satisfies Message, (res) => {
+      if (chrome.runtime.lastError) {
+        addLog(`Stop failed: ${chrome.runtime.lastError.message}`);
+        return;
+      }
+      const ok = res && typeof res === "object" && "ok" in res && (res as { ok?: boolean }).ok;
+      if (!ok) {
+        const err =
+          res && typeof res === "object" && "error" in res
+            ? String((res as { error?: string }).error)
+            : "unknown error";
+        addLog(`Stop failed: ${err}`);
+        return;
+      }
+      stopRunning();
+    });
+  }
+
   function addLog(msg: string) {
     setStatusLog((prev) => [...prev.slice(-29), msg]);
   }
@@ -630,6 +649,26 @@ export function Popup() {
                 }}
               />
             </div>
+          )}
+          {queueProgress.running && (
+            <button
+              type="button"
+              onClick={stopQueue}
+              style={{
+                width: "100%",
+                marginTop: "10px",
+                background: "rgba(239,68,68,0.12)",
+                border: "1px solid rgba(239,68,68,0.35)",
+                borderRadius: "8px",
+                color: "#f87171",
+                cursor: "pointer",
+                fontSize: "12px",
+                fontWeight: 600,
+                padding: "8px 10px",
+              }}
+            >
+              Stop queue
+            </button>
           )}
         </div>
       )}

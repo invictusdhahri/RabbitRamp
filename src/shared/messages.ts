@@ -35,6 +35,8 @@ export type Message =
   | { type: "QUEUE_START"; payload: { tabId: number; items: CourseItem[] } }
   /** Arm “Get Degree”: next home load on this tab triggers scrape + queue (call before navigating). */
   | { type: "GET_DEGREE_ARM"; payload: { tabId: number } }
+  /** Clear queue / “Get Degree” orchestration (in-flight tab work may still finish). */
+  | { type: "QUEUE_STOP" }
   /** Popup sync: current queue snapshot (null if idle). */
   | { type: "QUEUE_GET_STATE" }
   | {

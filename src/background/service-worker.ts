@@ -10,6 +10,7 @@ import {
   handleQueueSkillStatus,
   messageQueueStart,
   messageGetDegreeArm,
+  messageQueueStop,
   getQueueStateForPopup,
 } from "./queueRunner";
 
@@ -61,6 +62,23 @@ chrome.runtime.onMessage.addListener(
       case "QUEUE_GET_STATE": {
         sendResponse(getQueueStateForPopup());
         return false;
+      }
+
+      case "QUEUE_STOP": {
+        messageQueueStop()
+          .then(() => sendResponse({ ok: true }))
+          .catch((err: unknown) => {
+            logger.error(
+              "background",
+              "QUEUE_STOP failed",
+              err instanceof Error ? err.message : String(err)
+            );
+            sendResponse({
+              ok: false,
+              error: err instanceof Error ? err.message : String(err),
+            });
+          });
+        return true;
       }
 
       case "AI_REQUEST": {

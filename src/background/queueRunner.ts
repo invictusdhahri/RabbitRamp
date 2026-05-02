@@ -393,3 +393,16 @@ export async function messageGetDegreeArm(tabId: number): Promise<void> {
   };
   await persist();
 }
+
+export async function messageQueueStop(): Promise<void> {
+  await hydrate();
+  clearScheduleTimer();
+  const hadWork =
+    state != null &&
+    (state.queueRunning || state.getDegreePending || state.getDegreePhase != null);
+  state = null;
+  await persist();
+  if (hadWork) {
+    logQueue("Queue stopped.");
+  }
+}
