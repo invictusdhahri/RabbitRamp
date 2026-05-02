@@ -5,6 +5,41 @@ import { getSettings } from "../shared/storage";
 import { Message } from "../shared/messages";
 import * as logger from "../shared/logger";
 import { buildCourseHomeUrl, isCourseHomePage } from "../shared/courseraUrls";
+import { JumpingRabbit } from "../shared/ui/JumpingRabbit";
+
+// ─── Palette ─────────────────────────────────────────────────────────────────
+
+const C = {
+  bg: "#080b12",
+  surface: "#0e1120",
+  border: "rgba(255,255,255,0.07)",
+  borderHover: "rgba(255,255,255,0.13)",
+  accent: "#f97316",       // orange — primary actions
+  accentDim: "rgba(249,115,22,0.14)",
+  accentBorder: "rgba(249,115,22,0.38)",
+  amber: "#f59e0b",        // amber — GET DEGREE CTA only
+  amberDim: "rgba(245,158,11,0.15)",
+  amberBorder: "rgba(245,158,11,0.35)",
+  danger: "#ef4444",
+  dangerDim: "rgba(239,68,68,0.12)",
+  success: "#22c55e",
+  successDim: "rgba(34,197,94,0.12)",
+  text: "#e2e8f0",
+  textSub: "#94a3b8",
+  textMuted: "#475569",
+} as const;
+
+// ─── Skill colors ─────────────────────────────────────────────────────────────
+
+const SKILL_COLORS: Record<SkillType, { bg: string; border: string; color: string }> = {
+  videoSkipper:     { bg: "rgba(6,182,212,0.16)",   border: "rgba(6,182,212,0.35)",   color: "#22d3ee" },
+  readingSkipper:   { bg: "rgba(234,179,8,0.16)",   border: "rgba(234,179,8,0.35)",   color: "#facc15" },
+  quizSolver:       { bg: "rgba(139,92,246,0.16)",  border: "rgba(139,92,246,0.35)",  color: "#a78bfa" },
+  assignmentWriter: { bg: "rgba(59,130,246,0.16)",  border: "rgba(59,130,246,0.35)",  color: "#93c5fd" },
+  formFiller:       { bg: "rgba(34,197,94,0.16)",   border: "rgba(34,197,94,0.35)",   color: "#86efac" },
+};
+
+// ─── Skill config ─────────────────────────────────────────────────────────────
 
 type QueueProgressState = {
   running: boolean;
@@ -12,8 +47,6 @@ type QueueProgressState = {
   total: number;
   getDegreePhase: null | "navigating" | "scraping" | "running";
 };
-
-// ─── Skill config ──────────────────────────────────────────────────────────────
 
 interface SkillDef {
   id: SkillType;
@@ -88,7 +121,6 @@ export function Popup() {
   const [running, setRunning] = useState(false);
   const [hasProviders, setHasProviders] = useState(false);
 
-  // Course home — queue progress synced from background (runs with popup closed)
   const [courseItems, setCourseItems] = useState<CourseItem[]>([]);
   const [scanning, setScanning] = useState(false);
   const [queueProgress, setQueueProgress] = useState<QueueProgressState>({
@@ -209,16 +241,26 @@ export function Popup() {
       return;
     }
 
+    let skipNavigate = false;
     try {
       await new Promise<void>((resolve, reject) => {
         chrome.runtime.sendMessage(
           { type: "GET_DEGREE_ARM", payload: { tabId } } satisfies Message,
-          () => {
+          (
+            res:
+              | { ok?: boolean; skipNavigate?: boolean; error?: string }
+              | undefined
+          ) => {
             if (chrome.runtime.lastError) {
               reject(new Error(chrome.runtime.lastError.message));
-            } else {
-              resolve();
+              return;
             }
+            if (res && res.ok === false) {
+              reject(new Error(res.error ?? "GET_DEGREE_ARM failed"));
+              return;
+            }
+            skipNavigate = res?.skipNavigate === true;
+            resolve();
           }
         );
       });
@@ -229,8 +271,14 @@ export function Popup() {
 
     startRunning();
     setCourseItems([]);
-    addLog("Navigating to assignments page…");
-    chrome.tabs.update(tabId, { url: homeUrl });
+    addLog(
+      skipNavigate
+        ? "Already on assignments — scanning…"
+        : "Navigating to assignments page…"
+    );
+    if (!skipNavigate) {
+      chrome.tabs.update(tabId, { url: homeUrl });
+    }
   }
 
   function stopQueue() {
@@ -256,7 +304,7 @@ export function Popup() {
     setStatusLog((prev) => [...prev.slice(-29), msg]);
   }
 
-  // ─── Effects ─────────────────────────────────────────────────────────────
+  // ─── Effects ──────────────────────────────────────────────────────────────
 
   useEffect(() => {
     if (queueProgress.running && runningTimeoutRef.current) {
@@ -344,7 +392,399 @@ export function Popup() {
     }
   }, [statusLog]);
 
-  // ─── Per-page actions ──────────────────────────────────────────────────────
+  // ─── Derived ──────────────────────────────────────────────────────────────
+
+  const isCoursera = context?.url?.includes("coursera.org") ?? false;
+  const onHomePage = isCourseHomePage(context?.url);
+  const hasCourseSlug = !!buildCourseHomeUrl(context?.url);
+  const getDegreeLabel =
+    getDegreePhase === "navigating"
+      ? "Navigating…"
+      : getDegreePhase === "scraping"
+        ? "Scanning…"
+        : getDegreePhase === "running"
+          ? queueUiIndex !== null
+            ? queueProgress.total > 0
+              ? `${queueUiIndex + 1} / ${queueProgress.total}`
+              : `${queueUiIndex + 1} / …`
+            : "Running…"
+          : "Get Degree";
+
+  // ─── Render ───────────────────────────────────────────────────────────────
+
+  return (
+    <div
+      style={{
+        background: C.bg,
+        color: C.text,
+        fontFamily: "'Inter', 'Segoe UI', system-ui, sans-serif",
+        fontSize: "13px",
+        width: "340px",
+      }}
+    >
+      {/* ── Header ── */}
+      <div
+        style={{
+          background: C.surface,
+          borderBottom: `1px solid ${C.border}`,
+          padding: "12px 14px",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+        }}
+      >
+        <div style={{ display: "flex", alignItems: "center", gap: "9px" }}>
+          <div style={{
+            width: "34px",
+            height: "34px",
+            borderRadius: "9px",
+            background: "rgba(249,115,22,0.13)",
+            border: "1px solid rgba(249,115,22,0.28)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            flexShrink: 0,
+          }}>
+            <JumpingRabbit size={20} active={busy} color={C.accent} />
+          </div>
+          <div>
+            <div
+              style={{
+                fontWeight: 700,
+                fontSize: "14px",
+                color: C.text,
+                letterSpacing: "0.2px",
+              }}
+            >
+              RabbitRamp
+            </div>
+            <div style={{ fontSize: "10px", color: C.textMuted, letterSpacing: "0.3px" }}>
+              Coursera Autopilot
+            </div>
+          </div>
+        </div>
+        <button
+          onClick={() => chrome.runtime.openOptionsPage()}
+          style={ghostBtn}
+        >
+          ⚙ Settings
+        </button>
+      </div>
+
+      {/* ── Course Info ── */}
+      <div
+        style={{
+          padding: "10px 14px",
+          borderBottom: `1px solid ${C.border}`,
+        }}
+      >
+        {!isCoursera ? (
+          <div style={{ ...infoCard, borderColor: "rgba(245,158,11,0.25)", color: "#fbbf24" }}>
+            Navigate to a Coursera page to use RabbitRamp.
+          </div>
+        ) : (
+          <div style={infoCard}>
+            {context?.courseName ? (
+              <>
+                <div
+                  style={{
+                    fontWeight: 600,
+                    fontSize: "12px",
+                    color: C.text,
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                    whiteSpace: "nowrap",
+                  }}
+                  title={context.courseName}
+                >
+                  {context.courseName}
+                </div>
+                {onHomePage ? (
+                  <div style={{ fontSize: "11px", color: C.textSub, marginTop: "2px" }}>
+                    Assignments page — scan or auto-run below
+                  </div>
+                ) : context.weekLabel ? (
+                  <div style={{ fontSize: "11px", color: C.textSub, marginTop: "2px" }}>
+                    {context.weekLabel}
+                    {context.itemType !== "unknown" && (
+                      <> · {ITEM_ICONS[context.itemType]} {context.itemTitle || context.itemType}</>
+                    )}
+                  </div>
+                ) : null}
+              </>
+            ) : (
+              <div style={{ color: C.textMuted, fontSize: "12px" }}>Detecting course…</div>
+            )}
+          </div>
+        )}
+
+        {!hasProviders && (
+          <div
+            style={{
+              marginTop: "8px",
+              background: C.dangerDim,
+              border: `1px solid rgba(239,68,68,0.22)`,
+              borderRadius: "7px",
+              padding: "8px 11px",
+              color: "#f87171",
+              fontSize: "11px",
+              display: "flex",
+              alignItems: "center",
+              gap: "8px",
+            }}
+          >
+            <span style={{ flex: 1 }}>No AI provider configured.</span>
+            <button
+              onClick={() => chrome.runtime.openOptionsPage()}
+              style={{
+                background: "none",
+                border: "none",
+                color: "#f87171",
+                cursor: "pointer",
+                textDecoration: "underline",
+                fontSize: "11px",
+                padding: 0,
+                flexShrink: 0,
+              }}
+            >
+              Add API key →
+            </button>
+          </div>
+        )}
+      </div>
+
+      {/* ── GET DEGREE ── */}
+      {isCoursera && hasCourseSlug && (
+        <div style={{ padding: "10px 14px 0" }}>
+          <button
+            onClick={sendGetDegree}
+            disabled={busy}
+            title="Navigate to the assignments page, scan all graded items, and complete them automatically"
+            style={{
+              width: "100%",
+              background: busy && getDegreePhase
+                ? C.amberDim
+                : busy
+                  ? "rgba(245,158,11,0.08)"
+                  : "rgba(245,158,11,0.15)",
+              border: `1px solid ${busy && getDegreePhase ? C.amberBorder : "rgba(245,158,11,0.3)"}`,
+              borderRadius: "8px",
+              color: busy && getDegreePhase ? "#fbbf24" : C.amber,
+              cursor: busy ? "not-allowed" : "pointer",
+              fontSize: "12px",
+              fontWeight: 700,
+              padding: "10px 12px",
+              letterSpacing: "0.5px",
+              transition: "all 0.15s",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: "8px",
+              textTransform: "uppercase",
+            }}
+          >
+            {getDegreePhase ? (
+              <>
+                <JumpingRabbit size={15} active color={C.amber} />
+                {getDegreeLabel}
+              </>
+            ) : (
+              getDegreeLabel
+            )}
+          </button>
+
+          {getDegreePhase === "running" && queueProgress.total > 0 && (
+            <div
+              style={{
+                marginTop: "6px",
+                height: "2px",
+                borderRadius: "2px",
+                background: "rgba(255,255,255,0.06)",
+                overflow: "hidden",
+              }}
+            >
+              <div
+                style={{
+                  height: "100%",
+                  width: `${Math.min(
+                    100,
+                    Math.round(
+                      (((queueProgress.index ?? 0) + 1) / queueProgress.total) * 100
+                    )
+                  )}%`,
+                  background: C.amber,
+                  borderRadius: "2px",
+                  transition: "width 0.4s",
+                }}
+              />
+            </div>
+          )}
+
+          {queueProgress.running && (
+            <button
+              type="button"
+              onClick={stopQueue}
+              style={{
+                width: "100%",
+                marginTop: "7px",
+                background: C.dangerDim,
+                border: `1px solid rgba(239,68,68,0.3)`,
+                borderRadius: "7px",
+                color: "#f87171",
+                cursor: "pointer",
+                fontSize: "11px",
+                fontWeight: 600,
+                padding: "7px 10px",
+              }}
+            >
+              Stop queue
+            </button>
+          )}
+        </div>
+      )}
+
+      {/* ── Course Home scan panel ── */}
+      {isCoursera && onHomePage && (
+        <CourseHomePanel
+          items={courseItems}
+          scanning={scanning}
+          running={busy}
+          queueIndex={queueUiIndex}
+          getDegreeActive={getDegreePhase !== null}
+          onScan={scanAssignments}
+          onRunQueue={() => runQueue(courseItems)}
+        />
+      )}
+
+      {/* ── Per-page skill buttons ── */}
+      {isCoursera && !onHomePage && (
+        <div style={{ padding: "10px 14px 14px" }}>
+          <SectionLabel>Current page</SectionLabel>
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "1fr 1fr",
+              gap: "5px",
+              marginBottom: "8px",
+            }}
+          >
+            {SKILLS.map((skill) => {
+              const isRelevant = context?.itemType
+                ? skill.relevantFor.includes(context.itemType)
+                : false;
+              const isEnabled = settings.skills[skill.id];
+              const sc = SKILL_COLORS[skill.id];
+
+              return (
+                <button
+                  key={skill.id}
+                  onClick={() => sendSkill(skill.id)}
+                  disabled={busy || !isEnabled}
+                  title={skill.description}
+                  style={{
+                    background: isRelevant ? sc.bg : "rgba(255,255,255,0.025)",
+                    border: `1px solid ${isRelevant ? sc.border : C.border}`,
+                    borderRadius: "7px",
+                    color: isRelevant ? sc.color : C.textMuted,
+                    cursor: busy || !isEnabled ? "not-allowed" : "pointer",
+                    fontSize: "12px",
+                    fontWeight: isRelevant ? 600 : 400,
+                    padding: "8px 10px",
+                    textAlign: "left",
+                    transition: "all 0.15s",
+                    opacity: !isEnabled ? 0.38 : 1,
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "6px",
+                  }}
+                >
+                  <span style={{
+                    fontSize: "13px",
+                    width: "18px",
+                    height: "18px",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    borderRadius: "4px",
+                    background: isRelevant ? "rgba(255,255,255,0.07)" : "transparent",
+                    flexShrink: 0,
+                  }}>{skill.icon}</span>
+                  {skill.label}
+                </button>
+              );
+            })}
+          </div>
+
+          <button
+            onClick={sendDoEverything}
+            disabled={busy}
+            style={{
+              width: "100%",
+              background: busy ? C.accentDim : C.accent,
+              border: `1px solid ${busy ? C.accentBorder : "#ea6c0a"}`,
+              borderRadius: "8px",
+              color: busy ? "#fdba74" : "white",
+              cursor: busy ? "not-allowed" : "pointer",
+              fontSize: "12px",
+              fontWeight: 700,
+              padding: "10px",
+              letterSpacing: "0.3px",
+              transition: "all 0.15s",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: "7px",
+              boxShadow: busy ? "none" : "0 0 14px rgba(249,115,22,0.4)",
+            }}
+          >
+            {running && !queueProgress.running ? (
+              <>
+                <JumpingRabbit size={14} active color="#fdba74" />
+                Running…
+              </>
+            ) : (
+              "Do Everything"
+            )}
+          </button>
+        </div>
+      )}
+
+      {/* ── Status Log ── */}
+      {statusLog.length > 0 && (
+        <div
+          style={{
+            borderTop: `1px solid ${C.border}`,
+            padding: "8px 14px 11px",
+          }}
+        >
+          <SectionLabel>Log</SectionLabel>
+          <div
+            ref={logRef}
+            style={{
+              maxHeight: "78px",
+              overflowY: "auto",
+              display: "flex",
+              flexDirection: "column",
+              gap: "2px",
+            }}
+          >
+            {statusLog.map((entry, i) => (
+              <div
+                key={i}
+                style={{
+                  fontSize: "11px",
+                  color: i === statusLog.length - 1 ? C.textSub : C.textMuted,
+                  padding: "2px 0",
+                }}
+              >
+                {entry}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
 
   async function sendSkill(skill: SkillType) {
     if (busy) return;
@@ -416,418 +856,9 @@ export function Popup() {
       }
     );
   }
-
-  // ─── Derived ──────────────────────────────────────────────────────────────
-
-  const isCoursera = context?.url?.includes("coursera.org") ?? false;
-  const onHomePage = isCourseHomePage(context?.url);
-  const hasCourseSlug = !!buildCourseHomeUrl(context?.url);
-  const getDegreeLabel =
-    getDegreePhase === "navigating"
-      ? "Navigating…"
-      : getDegreePhase === "scraping"
-        ? "Scanning…"
-        : getDegreePhase === "running"
-          ? queueUiIndex !== null
-            ? queueProgress.total > 0
-              ? `${queueUiIndex + 1} / ${queueProgress.total}`
-              : `${queueUiIndex + 1} / …`
-            : "Running…"
-          : "🎓 GET DEGREE";
-
-  // ─── Render ───────────────────────────────────────────────────────────────
-
-  return (
-    <div
-      style={{
-        background: "#0f0f14",
-        color: "white",
-        fontFamily: "'Inter', 'Segoe UI', system-ui, sans-serif",
-        fontSize: "13px",
-        padding: "0",
-        width: "340px",
-      }}
-    >
-      {/* ── Header ── */}
-      <div
-        style={{
-          background: "linear-gradient(135deg, #1e1b4b 0%, #0f0f14 100%)",
-          borderBottom: "1px solid rgba(99,102,241,0.2)",
-          padding: "14px 16px",
-        }}
-      >
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-            <span style={{ fontSize: "20px" }}>⚡</span>
-            <div>
-              <div
-                style={{
-                  fontWeight: 800,
-                  fontSize: "15px",
-                  background: "linear-gradient(90deg, #818cf8, #c084fc)",
-                  WebkitBackgroundClip: "text",
-                  WebkitTextFillColor: "transparent",
-                }}
-              >
-                CoursCheat
-              </div>
-              <div style={{ fontSize: "10px", color: "#64748b" }}>Coursera Autopilot</div>
-            </div>
-          </div>
-          <button
-            onClick={() => chrome.runtime.openOptionsPage()}
-            style={{
-              background: "rgba(99,102,241,0.15)",
-              border: "1px solid rgba(99,102,241,0.3)",
-              borderRadius: "6px",
-              color: "#a5b4fc",
-              cursor: "pointer",
-              fontSize: "11px",
-              padding: "4px 8px",
-            }}
-          >
-            ⚙ Settings
-          </button>
-        </div>
-      </div>
-
-      {/* ── Course Info ── */}
-      <div style={{ padding: "12px 16px", borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
-        {!isCoursera ? (
-          <div
-            style={{
-              background: "rgba(251,191,36,0.08)",
-              border: "1px solid rgba(251,191,36,0.2)",
-              borderRadius: "8px",
-              padding: "10px 12px",
-              color: "#fbbf24",
-              fontSize: "12px",
-            }}
-          >
-            ⚠ Navigate to a Coursera page to use CoursCheat.
-          </div>
-        ) : (
-          <div
-            style={{
-              background: "rgba(99,102,241,0.08)",
-              border: "1px solid rgba(99,102,241,0.15)",
-              borderRadius: "8px",
-              padding: "10px 12px",
-            }}
-          >
-            {context?.courseName ? (
-              <>
-                <div
-                  style={{
-                    fontWeight: 600,
-                    fontSize: "12px",
-                    color: "#c7d2fe",
-                    overflow: "hidden",
-                    textOverflow: "ellipsis",
-                    whiteSpace: "nowrap",
-                  }}
-                  title={context.courseName}
-                >
-                  🎓 {context.courseName}
-                </div>
-                {onHomePage ? (
-                  <div style={{ fontSize: "11px", color: "#6366f1", marginTop: "3px" }}>
-                    📋 Assignments page — scan or auto-run below
-                  </div>
-                ) : context.weekLabel ? (
-                  <div style={{ fontSize: "11px", color: "#6366f1", marginTop: "3px" }}>
-                    {context.weekLabel}
-                    {context.itemType !== "unknown" && (
-                      <> · {ITEM_ICONS[context.itemType]} {context.itemTitle || context.itemType}</>
-                    )}
-                  </div>
-                ) : null}
-              </>
-            ) : (
-              <div style={{ color: "#64748b", fontSize: "12px" }}>Detecting course…</div>
-            )}
-          </div>
-        )}
-
-        {!hasProviders && (
-          <div
-            style={{
-              marginTop: "8px",
-              background: "rgba(239,68,68,0.08)",
-              border: "1px solid rgba(239,68,68,0.2)",
-              borderRadius: "8px",
-              padding: "8px 12px",
-              color: "#f87171",
-              fontSize: "11px",
-            }}
-          >
-            No AI provider configured.{" "}
-            <button
-              onClick={() => chrome.runtime.openOptionsPage()}
-              style={{
-                background: "none",
-                border: "none",
-                color: "#f87171",
-                cursor: "pointer",
-                textDecoration: "underline",
-                fontSize: "11px",
-                padding: 0,
-              }}
-            >
-              Add an API key →
-            </button>
-          </div>
-        )}
-      </div>
-
-      {/* ── GET DEGREE — always visible on any Coursera course page ── */}
-      {isCoursera && hasCourseSlug && (
-        <div
-          style={{
-            padding: "12px 16px 0",
-          }}
-        >
-          <button
-            onClick={sendGetDegree}
-            disabled={busy}
-            title="Navigate to the assignments page, scan all graded items, and complete them all automatically"
-            style={{
-              width: "100%",
-              background: busy && getDegreePhase
-                ? "rgba(245,158,11,0.25)"
-                : busy
-                  ? "rgba(245,158,11,0.15)"
-                  : "linear-gradient(135deg, #d97706, #f59e0b, #fbbf24)",
-              border: busy && getDegreePhase ? "1px solid rgba(245,158,11,0.5)" : "none",
-              borderRadius: "12px",
-              color: busy && getDegreePhase ? "#fcd34d" : "#0f0f14",
-              cursor: busy ? "not-allowed" : "pointer",
-              fontSize: "14px",
-              fontWeight: 800,
-              padding: "13px",
-              letterSpacing: "0.8px",
-              boxShadow: busy ? "none" : "0 4px 24px rgba(245,158,11,0.45)",
-              transition: "all 0.2s",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              gap: "8px",
-              textTransform: "uppercase",
-            }}
-          >
-            {getDegreePhase ? (
-              <>
-                <Spinner color={getDegreePhase ? "#fcd34d" : "#0f0f14"} />
-                {getDegreeLabel}
-              </>
-            ) : (
-              getDegreeLabel
-            )}
-          </button>
-          {getDegreePhase === "running" && queueProgress.total > 0 && (
-            <div
-              style={{
-                marginTop: "6px",
-                height: "3px",
-                borderRadius: "3px",
-                background: "rgba(255,255,255,0.08)",
-                overflow: "hidden",
-              }}
-            >
-              <div
-                style={{
-                  height: "100%",
-                  width: `${Math.min(
-                    100,
-                    Math.round(
-                      (((queueProgress.index ?? 0) + 1) / queueProgress.total) * 100
-                    )
-                  )}%`,
-                  background: "linear-gradient(90deg, #d97706, #fbbf24)",
-                  borderRadius: "3px",
-                  transition: "width 0.4s",
-                }}
-              />
-            </div>
-          )}
-          {queueProgress.running && (
-            <button
-              type="button"
-              onClick={stopQueue}
-              style={{
-                width: "100%",
-                marginTop: "10px",
-                background: "rgba(239,68,68,0.12)",
-                border: "1px solid rgba(239,68,68,0.35)",
-                borderRadius: "8px",
-                color: "#f87171",
-                cursor: "pointer",
-                fontSize: "12px",
-                fontWeight: 600,
-                padding: "8px 10px",
-              }}
-            >
-              Stop queue
-            </button>
-          )}
-        </div>
-      )}
-
-      {/* ── Course Home scan panel ── */}
-      {isCoursera && onHomePage && (
-        <CourseHomePanel
-          items={courseItems}
-          scanning={scanning}
-          running={busy}
-          queueIndex={queueUiIndex}
-          getDegreeActive={getDegreePhase !== null}
-          onScan={scanAssignments}
-          onRunQueue={() => runQueue(courseItems)}
-        />
-      )}
-
-      {/* ── Per-page skill buttons ── */}
-      {isCoursera && !onHomePage && (
-        <div style={{ padding: "12px 16px 16px" }}>
-          <div
-            style={{
-              fontSize: "10px",
-              color: "#475569",
-              textTransform: "uppercase",
-              letterSpacing: "0.8px",
-              marginBottom: "7px",
-              marginTop: "12px",
-            }}
-          >
-            Current page
-          </div>
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "1fr 1fr",
-              gap: "6px",
-              marginBottom: "8px",
-            }}
-          >
-            {SKILLS.map((skill) => {
-              const isRelevant = context?.itemType
-                ? skill.relevantFor.includes(context.itemType)
-                : false;
-              const isEnabled = settings.skills[skill.id];
-
-              return (
-                <button
-                  key={skill.id}
-                  onClick={() => sendSkill(skill.id)}
-                  disabled={busy || !isEnabled}
-                  title={skill.description}
-                  style={{
-                    background: isRelevant ? "rgba(99,102,241,0.15)" : "rgba(255,255,255,0.04)",
-                    border: isRelevant
-                      ? "1px solid rgba(99,102,241,0.4)"
-                      : "1px solid rgba(255,255,255,0.08)",
-                    borderRadius: "8px",
-                    color: isRelevant ? "#a5b4fc" : "#64748b",
-                    cursor: busy || !isEnabled ? "not-allowed" : "pointer",
-                    fontSize: "12px",
-                    fontWeight: isRelevant ? 600 : 400,
-                    padding: "9px 10px",
-                    textAlign: "left",
-                    transition: "all 0.2s",
-                    opacity: !isEnabled ? 0.4 : 1,
-                  }}
-                >
-                  <span style={{ marginRight: "6px" }}>{skill.icon}</span>
-                  {skill.label}
-                </button>
-              );
-            })}
-          </div>
-
-          <button
-            onClick={sendDoEverything}
-            disabled={busy}
-            style={{
-              width: "100%",
-              background: busy
-                ? "rgba(99,102,241,0.3)"
-                : "linear-gradient(135deg, #6366f1, #8b5cf6)",
-              border: "none",
-              borderRadius: "10px",
-              color: "white",
-              cursor: busy ? "not-allowed" : "pointer",
-              fontSize: "13px",
-              fontWeight: 700,
-              padding: "11px",
-              letterSpacing: "0.5px",
-              boxShadow: busy ? "none" : "0 4px 20px rgba(99,102,241,0.35)",
-              transition: "all 0.2s",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              gap: "6px",
-            }}
-          >
-            {running && !queueProgress.running ? (
-              <>
-                <Spinner /> Running…
-              </>
-            ) : (
-              "⚡ DO EVERYTHING"
-            )}
-          </button>
-        </div>
-      )}
-
-      {/* ── Status Log ── */}
-      {statusLog.length > 0 && (
-        <div
-          style={{
-            borderTop: "1px solid rgba(255,255,255,0.06)",
-            padding: "10px 16px 12px",
-          }}
-        >
-          <div
-            style={{
-              fontSize: "10px",
-              color: "#475569",
-              textTransform: "uppercase",
-              letterSpacing: "0.8px",
-              marginBottom: "6px",
-            }}
-          >
-            Log
-          </div>
-          <div
-            ref={logRef}
-            style={{
-              maxHeight: "80px",
-              overflowY: "auto",
-              display: "flex",
-              flexDirection: "column",
-              gap: "2px",
-            }}
-          >
-            {statusLog.map((entry, i) => (
-              <div
-                key={i}
-                style={{
-                  fontSize: "11px",
-                  color: i === statusLog.length - 1 ? "#c7d2fe" : "#475569",
-                  padding: "2px 0",
-                }}
-              >
-                {entry}
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-    </div>
-  );
 }
 
-// ─── CourseHomePanel ───────────────────────────────────────────────────────────
+// ─── CourseHomePanel ──────────────────────────────────────────────────────────
 
 interface CourseHomePanelProps {
   items: CourseItem[];
@@ -849,47 +880,36 @@ function CourseHomePanel({
   onRunQueue,
 }: CourseHomePanelProps) {
   const TYPE_COLORS: Record<ItemType, string> = {
-    quiz: "rgba(99,102,241,0.25)",
-    assignment: "rgba(139,92,246,0.25)",
-    form: "rgba(34,211,238,0.15)",
-    video: "rgba(16,185,129,0.15)",
-    reading: "rgba(251,191,36,0.15)",
-    unknown: "rgba(100,116,139,0.15)",
+    quiz: "rgba(139,92,246,0.16)",
+    assignment: "rgba(59,130,246,0.16)",
+    form: "rgba(34,197,94,0.14)",
+    video: "rgba(6,182,212,0.14)",
+    reading: "rgba(234,179,8,0.14)",
+    unknown: "rgba(100,116,139,0.12)",
   };
 
   const TYPE_TEXT: Record<ItemType, string> = {
-    quiz: "#a5b4fc",
-    assignment: "#c084fc",
-    form: "#67e8f9",
-    video: "#6ee7b7",
-    reading: "#fcd34d",
+    quiz: "#a78bfa",
+    assignment: "#93c5fd",
+    form: "#86efac",
+    video: "#22d3ee",
+    reading: "#facc15",
     unknown: "#94a3b8",
   };
 
   return (
-    <div style={{ padding: "12px 16px 16px" }}>
-      <div
-        style={{
-          fontSize: "10px",
-          color: "#475569",
-          textTransform: "uppercase",
-          letterSpacing: "0.8px",
-          marginBottom: "7px",
-          marginTop: "4px",
-        }}
-      >
-        Manual scan
-      </div>
+    <div style={{ padding: "10px 14px 14px" }}>
+      <SectionLabel>Manual scan</SectionLabel>
 
       <button
         onClick={onScan}
         disabled={scanning || running}
         style={{
           width: "100%",
-          background: "rgba(99,102,241,0.08)",
-          border: "1px solid rgba(99,102,241,0.25)",
-          borderRadius: "8px",
-          color: "#a5b4fc",
+          background: scanning || running ? C.accentDim : "rgba(249,115,22,0.1)",
+          border: `1px solid ${scanning || running ? C.accentBorder : "rgba(249,115,22,0.28)"}`,
+          borderRadius: "7px",
+          color: scanning || running ? C.textMuted : "#fdba74",
           cursor: scanning || running ? "not-allowed" : "pointer",
           fontSize: "12px",
           fontWeight: 600,
@@ -899,10 +919,17 @@ function CourseHomePanel({
           alignItems: "center",
           justifyContent: "center",
           gap: "6px",
-          transition: "all 0.2s",
+          transition: "all 0.15s",
         }}
       >
-        {scanning ? <><Spinner /> Scanning…</> : "🔍 Scan Assignments"}
+        {scanning ? (
+          <>
+            <JumpingRabbit size={14} active color={C.accent} />
+            Scanning…
+          </>
+        ) : (
+          "Scan Assignments"
+        )}
       </button>
 
       {items.length > 0 && (
@@ -914,9 +941,9 @@ function CourseHomePanel({
               <div
                 style={{
                   fontSize: "10px",
-                  color: "#475569",
+                  color: C.textMuted,
                   textTransform: "uppercase",
-                  letterSpacing: "0.8px",
+                  letterSpacing: "0.7px",
                   marginBottom: "5px",
                   display: "flex",
                   gap: "8px",
@@ -924,11 +951,12 @@ function CourseHomePanel({
               >
                 <span>{items.length} item{items.length !== 1 ? "s" : ""} found</span>
                 {doneCount > 0 && (
-                  <span style={{ color: "#22c55e" }}>{doneCount} done</span>
+                  <span style={{ color: "#4ade80" }}>{doneCount} done</span>
                 )}
               </div>
             );
           })()}
+
           <div
             style={{
               maxHeight: "130px",
@@ -948,28 +976,37 @@ function CourseHomePanel({
                 <div
                   key={item.url}
                   style={{
-                    background: isCurrent ? "rgba(99,102,241,0.15)" : "rgba(255,255,255,0.03)",
-                    border: isCurrent
-                      ? "1px solid rgba(99,102,241,0.35)"
-                      : isAlreadyCompleted
-                      ? "1px solid rgba(34,197,94,0.2)"
-                      : "1px solid rgba(255,255,255,0.05)",
+                    background: isCurrent ? C.accentDim : "rgba(255,255,255,0.025)",
+                    border: `1px solid ${
+                      isCurrent
+                        ? C.accentBorder
+                        : isAlreadyCompleted
+                        ? "rgba(34,197,94,0.18)"
+                        : C.border
+                    }`,
                     borderRadius: "5px",
                     padding: "5px 7px",
                     display: "flex",
                     alignItems: "center",
                     gap: "6px",
                     opacity: faded ? 0.38 : 1,
+                    transition: "opacity 0.2s",
                   }}
                 >
-                  <span style={{ fontSize: "12px", flexShrink: 0 }}>
-                    {isQueueDone || isAlreadyCompleted ? "✓" : ITEM_ICONS[item.itemType]}
+                  <span style={{ fontSize: "12px", flexShrink: 0, width: "16px", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                    {isCurrent ? (
+                      <JumpingRabbit size={14} active color="#fdba74" />
+                    ) : isQueueDone || isAlreadyCompleted ? (
+                      "✓"
+                    ) : (
+                      ITEM_ICONS[item.itemType]
+                    )}
                   </span>
                   <span
                     style={{
                       flex: 1,
                       fontSize: "11px",
-                      color: isCurrent ? "#e0e7ff" : "#94a3b8",
+                      color: isCurrent ? C.text : C.textSub,
                       overflow: "hidden",
                       textOverflow: "ellipsis",
                       whiteSpace: "nowrap",
@@ -986,7 +1023,7 @@ function CourseHomePanel({
                         fontWeight: 600,
                         padding: "2px 4px",
                         borderRadius: "3px",
-                        background: "rgba(34,197,94,0.15)",
+                        background: "rgba(34,197,94,0.12)",
                         color: "#4ade80",
                         flexShrink: 0,
                         textTransform: "uppercase",
@@ -1025,13 +1062,10 @@ function CourseHomePanel({
                 disabled={running || pendingCount === 0}
                 style={{
                   width: "100%",
-                  background:
-                    running || pendingCount === 0
-                      ? "rgba(99,102,241,0.3)"
-                      : "linear-gradient(135deg, #6366f1, #8b5cf6)",
-                  border: "none",
-                  borderRadius: "8px",
-                  color: "white",
+                  background: running || pendingCount === 0 ? C.accentDim : C.accent,
+                  border: `1px solid ${running || pendingCount === 0 ? C.accentBorder : "#ea6c0a"}`,
+                  borderRadius: "7px",
+                  color: running || pendingCount === 0 ? "#fdba74" : "white",
                   cursor: running || pendingCount === 0 ? "not-allowed" : "pointer",
                   fontSize: "12px",
                   fontWeight: 700,
@@ -1040,18 +1074,19 @@ function CourseHomePanel({
                   alignItems: "center",
                   justifyContent: "center",
                   gap: "6px",
-                  boxShadow:
-                    running || pendingCount === 0
-                      ? "none"
-                      : "0 3px 14px rgba(99,102,241,0.3)",
+                  transition: "all 0.15s",
+                  boxShadow: running || pendingCount === 0 ? "none" : "0 0 12px rgba(249,115,22,0.35)",
                 }}
               >
                 {running ? (
-                  <><Spinner /> Running…</>
+                  <>
+                    <JumpingRabbit size={14} active color="#fdba74" />
+                    Running…
+                  </>
                 ) : pendingCount === 0 ? (
-                  "All done"
+                  "✓ All done"
                 ) : (
-                  `⚡ Run Queue (${pendingCount}${pendingCount < items.length ? `/${items.length}` : ""})`
+                  `Run Queue (${pendingCount}${pendingCount < items.length ? `/${items.length}` : ""})`
                 )}
               </button>
             );
@@ -1062,19 +1097,40 @@ function CourseHomePanel({
   );
 }
 
-function Spinner({ color = "white" }: { color?: string }) {
+// ─── Shared mini components ───────────────────────────────────────────────────
+
+function SectionLabel({ children }: { children: React.ReactNode }) {
   return (
-    <span
+    <div
       style={{
-        display: "inline-block",
-        width: "12px",
-        height: "12px",
-        border: `2px solid ${color}40`,
-        borderTopColor: color,
-        borderRadius: "50%",
-        animation: "popup-spin 0.7s linear infinite",
-        flexShrink: 0,
+        fontSize: "10px",
+        color: C.textMuted,
+        textTransform: "uppercase",
+        letterSpacing: "0.7px",
+        marginBottom: "6px",
+        marginTop: "4px",
       }}
-    />
+    >
+      {children}
+    </div>
   );
 }
+
+const ghostBtn: React.CSSProperties = {
+  background: "rgba(249,115,22,0.08)",
+  border: "1px solid rgba(249,115,22,0.22)",
+  borderRadius: "6px",
+  color: "#fdba74",
+  cursor: "pointer",
+  fontSize: "11px",
+  fontWeight: 500,
+  padding: "4px 9px",
+  transition: "all 0.15s",
+};
+
+const infoCard: React.CSSProperties = {
+  background: "rgba(255,255,255,0.03)",
+  border: `1px solid ${C.border}`,
+  borderRadius: "7px",
+  padding: "9px 11px",
+};

@@ -7,7 +7,9 @@ import {
   tabUrlMatchesQueueItem,
 } from "../shared/courseraUrls";
 
-const STORAGE_KEY = "coursCheatQueueV1";
+const STORAGE_KEY = "rabbitRampQueueV1";
+/** Prior key before RabbitRamp rename — hydrate once and migrate into `STORAGE_KEY`. */
+const LEGACY_QUEUE_STORAGE_KEY = "coursCheatQueueV1";
 
 /** Serializable queue state (service worker may restart). */
 interface PersistedQueue {
@@ -53,9 +55,16 @@ async function hydrate(): Promise<void> {
   if (hydrated) return;
   if (!hydrateLoadPromise) {
     hydrateLoadPromise = chrome.storage.session
-      .get(STORAGE_KEY)
-      .then((data) => {
-        state = (data[STORAGE_KEY] as PersistedQueue | undefined) ?? null;
+      .get([STORAGE_KEY, LEGACY_QUEUE_STORAGE_KEY])
+      .then(async (data) => {
+        const next = data[STORAGE_KEY] as PersistedQueue | undefined;
+        const legacy =
+          data[LEGACY_QUEUE_STORAGE_KEY] as PersistedQueue | undefined;
+        state = next ?? legacy ?? null;
+        if (!next && legacy) {
+          await chrome.storage.session.remove(LEGACY_QUEUE_STORAGE_KEY);
+          await persist();
+        }
         hydrated = true;
       });
   }
@@ -217,6 +226,66 @@ function scheduleRunAllAfterLoad(tabId: number) {
   }, 800);
 }
 
+/**
+ * Start Get Degree scrape after armed + tab is on course home (assignments index).
+ * Returns true when scrape was started (caller should skip redundant navigation).
+ */
+async function tryBeginGetDegreeScrape(
+  tabId: number,
+  tabUrl: string | undefined
+): Promise<boolean> {
+  await hydrate();
+  if (!state || tabId !== state.tabId) return false;
+  if (!state.getDegreePending || !isCourseHomePage(tabUrl)) return false;
+
+  state.getDegreePending = false;
+  state.getDegreePhase = "scraping";
+  logQueue("Scanning for graded items…");
+  await persist();
+
+  chrome.tabs.sendMessage(
+    tabId,
+    { type: "SCRAPE_COURSE_ITEMS" } satisfies Message,
+    async (res: CourseItem[] | undefined) => {
+      await hydrate();
+      if (!state) return;
+      if (chrome.runtime.lastError || !res || res.length === 0) {
+        logQueue("No graded items found. Try expanding all weeks.");
+        state.getDegreePhase = null;
+        state.queueRunning = false;
+        state = null;
+        await persist();
+        return;
+      }
+      const pending = res.filter((i) => !i.completed);
+      const skipped = res.length - pending.length;
+      if (skipped > 0) {
+        logQueue(`Skipping ${skipped} already-completed item(s).`);
+      }
+      if (pending.length === 0) {
+        logQueue("Nothing to run — all items are already completed.");
+        state.getDegreePhase = null;
+        state.queueRunning = false;
+        state = null;
+        await persist();
+        return;
+      }
+      state.items = pending;
+      state.queuedRunTotal = pending.length;
+      state.queueIdx = -1;
+      state.queueRunning = true;
+      state.getDegreePhase = "running";
+      state.pendingQueueSkillRunIdx = -999;
+      logQueue(
+        `Starting queue — ${pending.length} item${pending.length !== 1 ? "s" : ""}…`
+      );
+      await persist();
+      await advanceQueue();
+    }
+  );
+  return true;
+}
+
 async function onTabUpdated(
   tabId: number,
   changeInfo: chrome.tabs.TabChangeInfo,
@@ -230,52 +299,7 @@ async function onTabUpdated(
   clearScheduleTimer();
 
   // Get Degree: first home load after arm → scrape + queue
-  if (state.getDegreePending && isCourseHomePage(tab.url)) {
-    state.getDegreePending = false;
-    state.getDegreePhase = "scraping";
-    logQueue("Scanning for graded items…");
-    await persist();
-
-    chrome.tabs.sendMessage(
-      tabId,
-      { type: "SCRAPE_COURSE_ITEMS" } satisfies Message,
-      async (res: CourseItem[] | undefined) => {
-        await hydrate();
-        if (!state) return;
-        if (chrome.runtime.lastError || !res || res.length === 0) {
-          logQueue("No graded items found. Try expanding all weeks.");
-          state.getDegreePhase = null;
-          state.queueRunning = false;
-          state = null;
-          await persist();
-          return;
-        }
-        const pending = res.filter((i) => !i.completed);
-        const skipped = res.length - pending.length;
-        if (skipped > 0) {
-          logQueue(`Skipping ${skipped} already-completed item(s).`);
-        }
-        if (pending.length === 0) {
-          logQueue("Nothing to run — all items are already completed.");
-          state.getDegreePhase = null;
-          state.queueRunning = false;
-          state = null;
-          await persist();
-          return;
-        }
-        state.items = pending;
-        state.queuedRunTotal = pending.length;
-        state.queueIdx = -1;
-        state.queueRunning = true;
-        state.getDegreePhase = "running";
-        state.pendingQueueSkillRunIdx = -999;
-        logQueue(
-          `Starting queue — ${pending.length} item${pending.length !== 1 ? "s" : ""}…`
-        );
-        await persist();
-        await advanceQueue();
-      }
-    );
+  if (await tryBeginGetDegreeScrape(tabId, tab.url)) {
     return;
   }
 
@@ -378,7 +402,8 @@ export async function messageQueueStart(payload: {
   return true;
 }
 
-export async function messageGetDegreeArm(tabId: number): Promise<void> {
+/** Resolves to true when the tab was already on course home — popup must not tabs.update (same URL often skips load → stuck “navigating”). */
+export async function messageGetDegreeArm(tabId: number): Promise<boolean> {
   await hydrate();
   state = {
     tabId,
@@ -392,6 +417,15 @@ export async function messageGetDegreeArm(tabId: number): Promise<void> {
     getDegreePhase: "navigating",
   };
   await persist();
+
+  let tab: chrome.tabs.Tab | undefined;
+  try {
+    tab = await chrome.tabs.get(tabId);
+  } catch {
+    return false;
+  }
+  const skipNavigate = await tryBeginGetDegreeScrape(tabId, tab.url);
+  return skipNavigate;
 }
 
 export async function messageQueueStop(): Promise<void> {

@@ -1,6 +1,41 @@
-# CoursCheat
+# RabbitRamp
+
+<div align="center">
+
+<!-- Banner generated using Claude (Anthropic) -->
+<img src="assets/banner.png" alt="RabbitRamp — Coursera AI Autopilot" width="100%" />
+
+</div>
+
+---
+
+## A Note From the Developer
+
+I built RabbitRamp with one philosophy in mind: **acceleration, not deception.**
+
+This tool was never meant for students to mindlessly bypass learning they haven't done. It exists for people who **already have the skills** but need the credentials to prove it.
+
+Here's the reality: a senior SQL engineer shouldn't need to spend 20 hours watching intro-level Coursera videos just to earn a certificate that proves what they already know. A self-taught developer with years of practical experience shouldn't lose job opportunities to someone with more certificates and less competence. The hiring system is imperfect — certifications are often a gating mechanism, not a true measure of ability.
+
+**RabbitRamp is for the person who:**
+- Already works in the field and just needs a proof-of-skill certificate
+- Is transitioning careers and wants to fast-track through content they genuinely understand
+- Has a weak CV despite strong real-world experience, and needs to close that gap quickly
+
+**It is not for:**
+- Students who want to skip learning they actually need
+- People who want to fake competence they don't have
+- Anyone looking to deceive employers or institutions
+
+Use it to accelerate. Don't use it to become dumb. That's the whole point.
+
+---
+
+## What is RabbitRamp?
 
 A Chrome extension that automates Coursera coursework using AI — skip videos and readings, solve quizzes, and write assignments with one click.
+
+No coding experience required to use it. Just install, add your API key, and go.
 
 ## Features
 
@@ -16,15 +51,63 @@ Additional options: **auto-submit**, **auto-next** (navigates to the next item a
 
 ## AI Providers
 
-CoursCheat routes requests through whichever providers you enable, in priority order:
+RabbitRamp routes requests through whichever provider you configure, in priority order:
 
-- **OpenAI** — default model `gpt-4o`
-- **Anthropic** — default model `claude-3-5-haiku-20241022`
-- **Google Gemini** — default model `gemini-1.5-pro`
+| Provider | Default Model | Notes |
+|---|---|---|
+| **OpenAI** | `gpt-4o` | Best overall quality |
+| **Anthropic** | `claude-haiku-4-5-20251001` | Fast and cost-efficient |
+| **Google Gemini** | `gemini-2.0-flash` | Free tier available |
 
-API keys are stored locally in Chrome's `sync` storage and never sent anywhere except the provider's own API endpoint.
+API keys are stored locally in Chrome's `sync` storage and are never sent anywhere except the provider's own API endpoint.
 
-## Setup
+---
+
+## Quick Start (No Coding Required)
+
+You do not need to be a developer to use this extension. Follow these steps:
+
+### 1. Get a pre-built release
+
+Download the latest `dist.zip` from the [Releases](../../releases) page and unzip it.
+
+### 2. Load the extension in Chrome
+
+1. Open `chrome://extensions` in your browser
+2. Enable **Developer mode** using the toggle in the top-right corner
+3. Click **Load unpacked** and select the unzipped `dist/` folder
+
+### 3. Add your API key
+
+You have two options:
+
+**Option A — Extension Settings (recommended)**
+1. Click the RabbitRamp icon in your browser toolbar
+2. Open the **Options** page
+3. Enter your API key for at least one provider (OpenAI, Anthropic, or Gemini) and save
+
+**Option B — `.env` file (for developers building from source)**
+Copy `.env.example` to `.env` and fill in your key:
+
+```env
+VITE_OPENAI_API_KEY=sk-...
+VITE_ANTHROPIC_API_KEY=sk-ant-...
+VITE_GEMINI_API_KEY=...
+```
+
+> Keys added via the Options page are stored in your browser and never leave your machine. Keys in `.env` are baked into the build at compile time — never share or distribute a build that contains real keys.
+
+### 4. Use it
+
+1. Navigate to any Coursera course item (video, reading, quiz, or assignment)
+2. Click the RabbitRamp extension icon to open the popup
+3. Click **Run All** to let the extension handle the current item automatically, or trigger individual skills manually
+
+A floating status bar on the page shows live progress.
+
+---
+
+## Developer Setup (Building from Source)
 
 ### Prerequisites
 
@@ -36,22 +119,6 @@ API keys are stored locally in Chrome's `sync` storage and never sent anywhere e
 ```bash
 pnpm install
 ```
-
-### Configure API keys (for development builds)
-
-Copy `.env.example` to `.env` and fill in at least one key:
-
-```bash
-cp .env.example .env
-```
-
-```env
-VITE_OPENAI_API_KEY=sk-...
-VITE_ANTHROPIC_API_KEY=sk-ant-...
-VITE_GEMINI_API_KEY=...
-```
-
-> **Note:** `VITE_*` values are inlined at build time. Never commit a `.env` file that contains real keys, and never distribute a build that was made with keys baked in. In production, users enter their own keys in the extension's Options page.
 
 ### Build
 
@@ -65,20 +132,7 @@ pnpm dev
 
 The built extension is output to `dist/`.
 
-### Load in Chrome
-
-1. Open `chrome://extensions`
-2. Enable **Developer mode** (top-right toggle)
-3. Click **Load unpacked** and select the `dist/` folder
-
-## Usage
-
-1. Open the extension's **Options** page and add at least one AI provider API key.
-2. Navigate to any Coursera course item (video, reading, quiz, or assignment).
-3. Click the extension icon to open the popup.
-4. Click **Run All** to let the extension handle the current item automatically, or trigger individual skills manually.
-
-A floating status bar on the page shows live progress.
+---
 
 ## Project Structure
 
@@ -98,10 +152,25 @@ src/
 
 ## Tech Stack
 
-- **Vite** + **@crxjs/vite-plugin** — Chrome extension build pipeline
-- **React 18** — Options and Popup UIs
-- **Tailwind CSS v4** — Styling
-- **TypeScript** — End-to-end type safety
+| Layer | Tech |
+|---|---|
+| Build | **Vite** + **@crxjs/vite-plugin** |
+| UI | **React 18** |
+| Styling | **Tailwind CSS v4** |
+| Language | **TypeScript 5.7** |
+| AI | OpenAI API · Anthropic API · Google Gemini API |
+
+### Type Definitions
+
+The shared type system (`src/shared/types.ts`) covers:
+
+- **`ItemType`** — `"video" | "reading" | "quiz" | "assignment" | "form" | "unknown"`
+- **`SkillType`** — `"videoSkipper" | "readingSkipper" | "quizSolver" | "assignmentWriter" | "formFiller"`
+- **`AIProvider`** — `"openai" | "anthropic" | "gemini"`
+- **`QuizQuestion`** — supports `"multiple-choice" | "checkbox" | "text"` question types
+- **`Settings`** — full user config including provider priority, per-provider model/key, skill toggles, and automation options
+
+---
 
 ## License
 
