@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { CourseContext, SkillStatus } from "../../shared/types";
+import { JumpingRabbit } from "../../shared/ui/JumpingRabbit";
 
 interface StatusBarProps {
   context: CourseContext;
@@ -16,11 +17,15 @@ const ITEM_ICONS: Record<string, string> = {
   unknown: "📄",
 };
 
+// Single accent — matches popup C.accent
+const ACCENT = "#f97316";
+const ACCENT_DIM = "rgba(249,115,22,0.18)";
+const ACCENT_BORDER = "rgba(249,115,22,0.38)";
+
 export function StatusBar({ context, status, message }: StatusBarProps) {
   const [visible, setVisible] = useState(true);
   const [minimized, setMinimized] = useState(false);
 
-  // Auto-hide after done
   useEffect(() => {
     if (status === "done") {
       const t = setTimeout(() => setMinimized(true), 3000);
@@ -42,45 +47,47 @@ export function StatusBar({ context, status, message }: StatusBarProps) {
         zIndex: 2147483647,
         fontFamily: "'Inter', 'Segoe UI', system-ui, sans-serif",
         fontSize: "13px",
-        transition: "all 0.3s ease",
-        maxWidth: minimized ? "48px" : "320px",
+        transition: "all 0.25s ease",
+        maxWidth: minimized ? "44px" : "310px",
         overflow: "hidden",
       }}
     >
       {minimized ? (
+        /* Minimized FAB — rabbit mark */
         <button
           onClick={() => setMinimized(false)}
           style={{
-            width: "44px",
-            height: "44px",
-            borderRadius: "50%",
-            background: "linear-gradient(135deg, #6366f1, #8b5cf6)",
-            border: "none",
+            width: "40px",
+            height: "40px",
+            borderRadius: "10px",
+            background: "#141519",
+            border: `1px solid ${ACCENT_BORDER}`,
             cursor: "pointer",
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
-            fontSize: "20px",
-            boxShadow: "0 4px 20px rgba(99,102,241,0.4)",
-            color: "white",
+            boxShadow: "0 2px 12px rgba(0,0,0,0.5)",
+            color: ACCENT,
           }}
           title="CoursCheat"
         >
-          ⚡
+          <JumpingRabbit size={20} active={isRunning} color={ACCENT} />
         </button>
       ) : (
         <div
           style={{
-            background: "rgba(15, 15, 20, 0.95)",
-            backdropFilter: "blur(12px)",
-            borderRadius: "12px",
-            border: "1px solid rgba(99,102,241,0.3)",
-            padding: "12px 14px",
-            boxShadow: "0 8px 32px rgba(0,0,0,0.4)",
+            background: "rgba(12, 13, 16, 0.97)",
+            backdropFilter: "blur(14px)",
+            WebkitBackdropFilter: "blur(14px)",
+            borderRadius: "10px",
+            border: `1px solid ${isRunning ? ACCENT_BORDER : "rgba(255,255,255,0.08)"}`,
+            padding: "10px 12px",
+            boxShadow: "0 6px 28px rgba(0,0,0,0.5)",
             color: "white",
+            transition: "border-color 0.2s",
           }}
         >
-          {/* Header */}
+          {/* Header row */}
           <div
             style={{
               display: "flex",
@@ -89,32 +96,30 @@ export function StatusBar({ context, status, message }: StatusBarProps) {
               marginBottom: "8px",
             }}
           >
-            <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-              <span style={{ fontSize: "16px" }}>⚡</span>
+            <div style={{ display: "flex", alignItems: "center", gap: "7px" }}>
+              <JumpingRabbit size={16} active={isRunning} color={ACCENT} />
               <span
                 style={{
                   fontWeight: 700,
                   fontSize: "12px",
-                  background: "linear-gradient(90deg, #6366f1, #a78bfa)",
-                  WebkitBackgroundClip: "text",
-                  WebkitTextFillColor: "transparent",
-                  letterSpacing: "0.5px",
+                  color: "#e2e8f0",
+                  letterSpacing: "0.3px",
                 }}
               >
-                COURSCHEAT
+                CoursCheat
               </span>
             </div>
-            <div style={{ display: "flex", gap: "4px" }}>
+            <div style={{ display: "flex", gap: "3px" }}>
               <button
                 onClick={() => setMinimized(true)}
-                style={iconBtn}
+                style={iconBtnStyle}
                 title="Minimize"
               >
                 −
               </button>
               <button
                 onClick={() => setVisible(false)}
-                style={iconBtn}
+                style={iconBtnStyle}
                 title="Close"
               >
                 ×
@@ -127,44 +132,47 @@ export function StatusBar({ context, status, message }: StatusBarProps) {
             <div
               style={{
                 fontSize: "11px",
-                color: "#94a3b8",
-                marginBottom: "4px",
+                color: "#64748b",
+                marginBottom: "3px",
                 overflow: "hidden",
                 textOverflow: "ellipsis",
                 whiteSpace: "nowrap",
               }}
               title={context.courseName}
             >
-              🎓 {context.courseName}
+              {context.courseName}
             </div>
           )}
           {context.weekLabel && (
             <div
               style={{
                 fontSize: "11px",
-                color: "#64748b",
-                marginBottom: "8px",
+                color: "#475569",
+                marginBottom: "7px",
               }}
             >
               {context.weekLabel} · {icon} {context.itemTitle || context.itemType}
             </div>
           )}
 
-          {/* Status */}
+          {/* Status row */}
           <div
             style={{
               display: "flex",
               alignItems: "center",
               gap: "8px",
-              background: "rgba(255,255,255,0.05)",
-              borderRadius: "8px",
-              padding: "8px 10px",
+              background: isRunning ? ACCENT_DIM : "rgba(255,255,255,0.04)",
+              borderRadius: "7px",
+              padding: "7px 9px",
+              transition: "background 0.2s",
             }}
           >
-            {isRunning && <Spinner />}
+            {isRunning && (
+              <Spinner />
+            )}
             <span
               style={{
-                color: isRunning ? "#a78bfa" : status === "error" ? "#f87171" : "#86efac",
+                color: isRunning ? "#fdba74" : status === "error" ? "#f87171" : "#86efac",
                 fontSize: "12px",
                 flex: 1,
                 overflow: "hidden",
@@ -187,10 +195,10 @@ function Spinner() {
     <span
       style={{
         display: "inline-block",
-        width: "12px",
-        height: "12px",
-        border: "2px solid rgba(167,139,250,0.3)",
-        borderTopColor: "#a78bfa",
+        width: "11px",
+        height: "11px",
+        border: "1.5px solid rgba(147,197,253,0.25)",
+        borderTopColor: "#fdba74",
         borderRadius: "50%",
         animation: "courscheat-spin 0.7s linear infinite",
         flexShrink: 0,
@@ -199,12 +207,12 @@ function Spinner() {
   );
 }
 
-const iconBtn: React.CSSProperties = {
+const iconBtnStyle: React.CSSProperties = {
   background: "none",
   border: "none",
-  color: "#64748b",
+  color: "#475569",
   cursor: "pointer",
-  fontSize: "16px",
+  fontSize: "15px",
   lineHeight: 1,
   padding: "2px 4px",
   borderRadius: "4px",

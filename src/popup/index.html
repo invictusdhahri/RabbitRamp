@@ -6,8 +6,13 @@
     <title>CoursCheat</title>
     <style>
       * { box-sizing: border-box; margin: 0; padding: 0; }
-      body { width: 340px; min-height: 200px; background: #0f0f14; }
+      body { width: 340px; min-height: 200px; background: #0c0d10; }
       @keyframes popup-spin { to { transform: rotate(360deg); } }
+      @keyframes courscheat-hop {
+        0%   { transform: translateY(0)   scaleY(1); }
+        40%  { transform: translateY(-5px) scaleY(1.05); }
+        100% { transform: translateY(-9px) scaleY(0.95); }
+      }
     </style>
   </head>
   <body>

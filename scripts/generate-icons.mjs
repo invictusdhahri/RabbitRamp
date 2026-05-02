@@ -61,37 +61,72 @@ function makePNG(pixels, width, height) {
   ]);
 }
 
-/** Render a solid rounded-rect with a lightning symbol */
+/** Render a rounded-rect with a minimal rabbit silhouette + soft glow halo */
 function renderIcon(size) {
   const pixels = new Uint8Array(size * size * 4);
 
-  const radius = size * 0.18;
+  const radius = size * 0.22;
 
+  // Background: deep navy #0a0e20
+  const bgR = 0x0a, bgG = 0x0e, bgB = 0x20;
+  // Rabbit: bright sky-blue #7dd3fc
+  const rabR = 0x7d, rabG = 0xd3, rabB = 0xfc;
+  // Glow: slightly desaturated version of rabbit
+  const glowR = 0x3b, glowG = 0x82, glowB = 0xf6;
+  // Glow halo radius in normalised units
+  const glowHalo = 0.072;
+
+  // Pre-compute nearest-rabbit distance field at low resolution for glow
+  // We sample the glow at each pixel by computing min-distance to rabbit surface
   for (let y = 0; y < size; y++) {
     for (let x = 0; x < size; x++) {
       const idx = (y * size + x) * 4;
 
-      // Rounded rectangle check
       const inRect = isInRoundedRect(x, y, 0, 0, size, size, radius);
 
       if (!inRect) {
-        pixels[idx + 3] = 0; // transparent
+        pixels[idx + 3] = 0;
         continue;
       }
 
-      // Background gradient: dark indigo #1e1b4b → #312e81
-      const t = (x + y) / (size * 2);
-      pixels[idx] = lerp(0x1e, 0x31, t);
-      pixels[idx + 1] = lerp(0x1b, 0x2e, t);
-      pixels[idx + 2] = lerp(0x4b, 0x81, t);
-      pixels[idx + 3] = 255;
+      const nx = (x + 0.5) / size;
+      const ny = (y + 0.5) / size;
+      const isRabbit = isRabbitPixel(x, y, size);
 
-      // Lightning bolt drawn as pixels
-      if (isLightningPixel(x, y, size)) {
-        // Soft lavender #a78bfa
-        pixels[idx] = 0xa7;
-        pixels[idx + 1] = 0x8b;
-        pixels[idx + 2] = 0xfa;
+      if (isRabbit) {
+        pixels[idx]     = rabR;
+        pixels[idx + 1] = rabG;
+        pixels[idx + 2] = rabB;
+        pixels[idx + 3] = 255;
+      } else {
+        // Check proximity to rabbit for glow effect (sample 8 nearby pixels)
+        let nearestDist = Infinity;
+        const step = glowHalo / 3;
+        for (let dy = -glowHalo; dy <= glowHalo; dy += step) {
+          for (let dx = -glowHalo; dx <= glowHalo; dx += step) {
+            if (dx === 0 && dy === 0) continue;
+            const sx = Math.round((nx + dx) * size - 0.5);
+            const sy = Math.round((ny + dy) * size - 0.5);
+            if (sx >= 0 && sx < size && sy >= 0 && sy < size) {
+              if (isRabbitPixel(sx, sy, size)) {
+                const d = Math.hypot(dx, dy);
+                if (d < nearestDist) nearestDist = d;
+              }
+            }
+          }
+        }
+
+        if (nearestDist < glowHalo) {
+          // Blend background toward glow color
+          const t = Math.pow(1 - nearestDist / glowHalo, 2) * 0.45;
+          pixels[idx]     = lerp(bgR, glowR, t);
+          pixels[idx + 1] = lerp(bgG, glowG, t);
+          pixels[idx + 2] = lerp(bgB, glowB, t);
+        } else {
+          pixels[idx]     = bgR;
+          pixels[idx + 1] = bgG;
+          pixels[idx + 2] = bgB;
+        }
         pixels[idx + 3] = 255;
       }
     }
@@ -123,22 +158,42 @@ function isInRoundedRect(px, py, x, y, w, h, r) {
   return true;
 }
 
-function isLightningPixel(px, py, size) {
-  // Normalise to 0..1
-  const nx = px / size;
-  const ny = py / size;
+/**
+ * Minimal rabbit mark in normalised [0,1] space:
+ *   - Two narrow upright ears (left & right)
+ *   - A circular head
+ *   - A slightly larger elliptical body below
+ * All drawn via distance-field checks for crispness at any size.
+ */
+function isRabbitPixel(px, py, size) {
+  const nx = (px + 0.5) / size;
+  const ny = (py + 0.5) / size;
 
-  // Lightning bolt polygon (normalised coordinates)
-  // Top part: upper-right slanting down to middle-left
-  // Bottom part: middle-right slanting down to lower-left
-  const boldness = 0.13;
+  const stroke = 0.065;        // ear stroke half-width
+  const earH   = 0.30;         // ear height (normalised)
+  const earW   = stroke;
 
-  // Upper bolt: (0.62, 0.08) → (0.36, 0.50)
-  const d1 = distToSegment(nx, ny, 0.62, 0.08, 0.36, 0.50);
-  // Lower bolt: (0.64, 0.50) → (0.38, 0.92)
-  const d2 = distToSegment(nx, ny, 0.64, 0.50, 0.38, 0.92);
+  // Left ear  — centre x=0.38, top y=0.08, bottom y=0.08+earH
+  const leftEarX  = 0.38;
+  const rightEarX = 0.62;
+  const earTopY   = 0.07;
+  const earBotY   = earTopY + earH;
 
-  return d1 < boldness || d2 < boldness;
+  const dLE = distToSegment(nx, ny, leftEarX,  earTopY, leftEarX,  earBotY);
+  const dRE = distToSegment(nx, ny, rightEarX, earTopY, rightEarX, earBotY);
+  if (dLE < earW || dRE < earW) return true;
+
+  // Head — circle centred at (0.50, 0.52), radius 0.17
+  const hx = 0.50, hy = 0.52, hr = 0.175;
+  const dHead = Math.hypot(nx - hx, ny - hy);
+  if (dHead < hr) return true;
+
+  // Body — ellipse centred at (0.50, 0.76), rx=0.21, ry=0.17
+  const bx = 0.50, by = 0.76, brx = 0.21, bry = 0.17;
+  const dBody = Math.hypot((nx - bx) / brx, (ny - by) / bry);
+  if (dBody < 1) return true;
+
+  return false;
 }
 
 function distToSegment(px, py, x1, y1, x2, y2) {

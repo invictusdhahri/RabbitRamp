@@ -44,7 +44,9 @@ chrome.runtime.onMessage.addListener(
 
       case "GET_DEGREE_ARM": {
         messageGetDegreeArm(message.payload.tabId)
-          .then(() => sendResponse({ ok: true }))
+          .then((skipNavigate) =>
+            sendResponse({ ok: true as const, skipNavigate })
+          )
           .catch((err: unknown) => {
             logger.error(
               "background",
