@@ -3,7 +3,7 @@
  * page console (content scripts), popup (inspect popup), or service worker console.
  */
 
-const PREFIX = "[CoursCheat]";
+const PREFIX = "[RabbitRamp]";
 
 export function log(scope: string, ...args: unknown[]): void {
   console.log(`${PREFIX} [${scope}]`, ...args);

@@ -456,7 +456,7 @@ export function Popup() {
                 letterSpacing: "0.2px",
               }}
             >
-              CoursCheat
+              RabbitRamp
             </div>
             <div style={{ fontSize: "10px", color: C.textMuted, letterSpacing: "0.3px" }}>
               Coursera Autopilot
@@ -480,7 +480,7 @@ export function Popup() {
       >
         {!isCoursera ? (
           <div style={{ ...infoCard, borderColor: "rgba(245,158,11,0.25)", color: "#fbbf24" }}>
-            Navigate to a Coursera page to use CoursCheat.
+            Navigate to a Coursera page to use RabbitRamp.
           </div>
         ) : (
           <div style={infoCard}>

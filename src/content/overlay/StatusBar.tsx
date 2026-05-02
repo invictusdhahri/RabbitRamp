@@ -69,7 +69,7 @@ export function StatusBar({ context, status, message }: StatusBarProps) {
             boxShadow: "0 2px 12px rgba(0,0,0,0.5)",
             color: ACCENT,
           }}
-          title="CoursCheat"
+          title="RabbitRamp"
         >
           <JumpingRabbit size={20} active={isRunning} color={ACCENT} />
         </button>
@@ -106,7 +106,7 @@ export function StatusBar({ context, status, message }: StatusBarProps) {
                   letterSpacing: "0.3px",
                 }}
               >
-                CoursCheat
+                RabbitRamp
               </span>
             </div>
             <div style={{ display: "flex", gap: "3px" }}>
@@ -200,7 +200,7 @@ function Spinner() {
         border: "1.5px solid rgba(147,197,253,0.25)",
         borderTopColor: "#fdba74",
         borderRadius: "50%",
-        animation: "courscheat-spin 0.7s linear infinite",
+        animation: "rabbitramp-spin 0.7s linear infinite",
         flexShrink: 0,
       }}
     />

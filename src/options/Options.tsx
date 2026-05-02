@@ -219,7 +219,7 @@ export function Options() {
           <JumpingRabbit size={24} active={false} color={C.accent} />
           <div>
             <div style={{ fontWeight: 700, fontSize: "18px", color: C.text, letterSpacing: "0.2px" }}>
-              CoursCheat
+              RabbitRamp
             </div>
             <div style={{ fontSize: "11px", color: C.textMuted }}>Settings & API Keys</div>
           </div>

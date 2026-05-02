@@ -1,7 +1,7 @@
 /**
  * Clean rabbit silhouette — filled pill-shaped ears, circular head, oval body.
  * No opacity stacking, no stroke-only paths — renders crisply at 14–24 px.
- * When `active` is true the element loops the courscheat-hop CSS animation.
+ * When `active` is true the element loops the rabbitramp-hop CSS animation.
  */
 interface JumpingRabbitProps {
   size?: number;
@@ -27,7 +27,7 @@ export function JumpingRabbit({
       className={className}
       style={
         active
-          ? { animation: "courscheat-hop 0.55s ease-in-out infinite alternate", display: "inline-block", flexShrink: 0 }
+          ? { animation: "rabbitramp-hop 0.55s ease-in-out infinite alternate", display: "inline-block", flexShrink: 0 }
           : { display: "inline-block", flexShrink: 0 }
       }
     >

@@ -7,7 +7,9 @@ import {
   tabUrlMatchesQueueItem,
 } from "../shared/courseraUrls";
 
-const STORAGE_KEY = "coursCheatQueueV1";
+const STORAGE_KEY = "rabbitRampQueueV1";
+/** Prior key before RabbitRamp rename — hydrate once and migrate into `STORAGE_KEY`. */
+const LEGACY_QUEUE_STORAGE_KEY = "coursCheatQueueV1";
 
 /** Serializable queue state (service worker may restart). */
 interface PersistedQueue {
@@ -53,9 +55,16 @@ async function hydrate(): Promise<void> {
   if (hydrated) return;
   if (!hydrateLoadPromise) {
     hydrateLoadPromise = chrome.storage.session
-      .get(STORAGE_KEY)
-      .then((data) => {
-        state = (data[STORAGE_KEY] as PersistedQueue | undefined) ?? null;
+      .get([STORAGE_KEY, LEGACY_QUEUE_STORAGE_KEY])
+      .then(async (data) => {
+        const next = data[STORAGE_KEY] as PersistedQueue | undefined;
+        const legacy =
+          data[LEGACY_QUEUE_STORAGE_KEY] as PersistedQueue | undefined;
+        state = next ?? legacy ?? null;
+        if (!next && legacy) {
+          await chrome.storage.session.remove(LEGACY_QUEUE_STORAGE_KEY);
+          await persist();
+        }
         hydrated = true;
       });
   }

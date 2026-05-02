@@ -2,7 +2,8 @@ import { defineManifest } from "@crxjs/vite-plugin";
 
 export default defineManifest({
   manifest_version: 3,
-  name: "CoursCheat — Coursera Autopilot",
+  name: "RabbitRamp — Coursera Autopilot",
+  short_name: "RabbitRamp",
   version: "1.0.0",
   description:
     "Skip videos & readings, solve quizzes, write assignments and fill forms on Coursera — powered by OpenAI, Anthropic, and Gemini.",
