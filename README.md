@@ -5,29 +5,14 @@
 <!-- Banner generated using Claude (Anthropic) -->
 <img src="assets/banner.png" alt="RabbitRamp — Coursera AI Autopilot" width="100%" />
 
+<br/><br/>
+
+![Status](https://img.shields.io/badge/STATUS-WORKING%20(MAY%202026)-brightgreen?style=flat-square&logo=statuspage&logoColor=white)
+![OpenAI API](https://img.shields.io/badge/OPENAI%20API-NOT%20REQUIRED-blue?style=flat-square)
+![Platform](https://img.shields.io/badge/PLATFORM-COURSERA-0056D2?style=flat-square&logo=coursera&logoColor=white)
+![License](https://img.shields.io/badge/LICENSE-OPEN%20SOURCE-brightgreen?style=flat-square)
+
 </div>
-
----
-
-## A Note From the Developer
-
-I built RabbitRamp with one philosophy in mind: **acceleration, not deception.**
-
-This tool was never meant for students to mindlessly bypass learning they haven't done. It exists for people who **already have the skills** but need the credentials to prove it.
-
-Here's the reality: a senior SQL engineer shouldn't need to spend 20 hours watching intro-level Coursera videos just to earn a certificate that proves what they already know. A self-taught developer with years of practical experience shouldn't lose job opportunities to someone with more certificates and less competence. The hiring system is imperfect — certifications are often a gating mechanism, not a true measure of ability.
-
-**RabbitRamp is for the person who:**
-- Already works in the field and just needs a proof-of-skill certificate
-- Is transitioning careers and wants to fast-track through content they genuinely understand
-- Has a weak CV despite strong real-world experience, and needs to close that gap quickly
-
-**It is not for:**
-- Students who want to skip learning they actually need
-- People who want to fake competence they don't have
-- Anyone looking to deceive employers or institutions
-
-Use it to accelerate. Don't use it to become dumb. That's the whole point.
 
 ---
 
@@ -175,3 +160,25 @@ The shared type system (`src/shared/types.ts`) covers:
 ## License
 
 MIT
+
+---
+
+## A Note From the Developer
+
+I built RabbitRamp with one philosophy in mind: **acceleration, not deception.**
+
+This tool was never meant for students to mindlessly bypass learning they haven't done. It exists for people who **already have the skills** but need the credentials to prove it.
+
+Here's the reality: a senior SQL engineer shouldn't need to spend 20 hours watching intro-level Coursera videos just to earn a certificate that proves what they already know. A self-taught developer with years of practical experience shouldn't lose job opportunities to someone with more certificates and less competence. The hiring system is imperfect — certifications are often a gating mechanism, not a true measure of ability.
+
+**RabbitRamp is for the person who:**
+- Already works in the field and just needs a proof-of-skill certificate
+- Is transitioning careers and wants to fast-track through content they genuinely understand
+- Has a weak CV despite strong real-world experience, and needs to close that gap quickly
+
+**It is not for:**
+- Students who want to skip learning they actually need
+- People who want to fake competence they don't have
+- Anyone looking to deceive employers or institutions
+
+Use it to accelerate. Don't use it to become dumb. That's the whole point.
