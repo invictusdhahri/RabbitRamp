@@ -43,7 +43,12 @@ function migrateStaleModels(settings: Settings): Settings {
   return { ...settings, providers };
 }
 
-/** If an env key is present, it is always the source of truth — override stored key and force-enable. */
+/**
+ * If an env key is present, it overrides that provider's stored key and enables it.
+ *
+ * We intentionally do NOT reorder `providerPriority` here — that made every reload
+ * wipe the user's drag-order (Get Degree / Options) whenever any .env key existed.
+ */
 function applyEnvApiKeys(settings: Settings): Settings {
   const providers = { ...settings.providers };
   const overridden: AIProvider[] = [];
@@ -54,20 +59,10 @@ function applyEnvApiKeys(settings: Settings): Settings {
       overridden.push(id);
     }
   }
-  let providerPriority = settings.providerPriority;
-  if (overridden.length > 0) {
-    const fromEnv = new Set(overridden);
-    const front = PROVIDER_TRY_ORDER.filter((id) => fromEnv.has(id));
-    const rest = settings.providerPriority.filter((id) => !fromEnv.has(id));
-    providerPriority = [...front, ...rest];
-    logger.log("storage", "provider try order: .env providers first (canonical)", {
-      order: providerPriority,
-    });
-  }
   if (overridden.length > 0) {
     logger.log("storage", "API keys from .env applied (masked)", { providers: overridden });
   }
-  return { ...settings, providers, providerPriority };
+  return { ...settings, providers };
 }
 
 function mergeStored(stored: Partial<Settings>): Settings {
@@ -85,22 +80,90 @@ function mergeStored(stored: Partial<Settings>): Settings {
   };
 }
 
+/**
+ * Strip provider configs that came from .env so we only persist keys the user
+ * explicitly entered via the UI. Env keys are re-applied on every load by
+ * applyEnvApiKeys(), so there is no need to store them — and not storing them
+ * means the saved state won't look "wrong" if .env changes.
+ */
+function stripEnvKeys(settings: Settings): Settings {
+  const providers = { ...settings.providers };
+  for (const id of PROVIDER_TRY_ORDER) {
+    const fromEnv = envApiKey(id);
+    if (fromEnv && providers[id]?.apiKey === fromEnv) {
+      providers[id] = { ...providers[id], apiKey: "", enabled: false };
+    }
+  }
+  return { ...settings, providers };
+}
+
+function finalizeFromPartial(stored: Partial<Settings>): Settings {
+  return migrateStaleModels(applyEnvApiKeys(mergeStored(stored)));
+}
+
 export async function getSettings(): Promise<Settings> {
-  return new Promise((resolve) => {
-    chrome.storage.sync.get("settings", (result) => {
-      const stored = result["settings"] as Partial<Settings> | undefined;
-      if (!stored) {
-        resolve(applyEnvApiKeys(DEFAULT_SETTINGS));
+  return new Promise((resolve, reject) => {
+    chrome.storage.local.get("settings", (localResult) => {
+      if (chrome.runtime.lastError) {
+        logger.error("storage", "getSettings failed", chrome.runtime.lastError.message);
+        reject(new Error(chrome.runtime.lastError.message));
         return;
       }
-      resolve(migrateStaleModels(applyEnvApiKeys(mergeStored(stored))));
+
+      const local = localResult["settings"] as Partial<Settings> | undefined;
+
+      if (local != null) {
+        resolve(finalizeFromPartial(local));
+        return;
+      }
+
+      // Older builds used chrome.storage.sync — one-time migrate so saves survive reload.
+      chrome.storage.sync.get("settings", (syncResult) => {
+        if (chrome.runtime.lastError) {
+          logger.warn(
+            "storage",
+            "sync read failed during migration",
+            chrome.runtime.lastError.message
+          );
+          resolve(applyEnvApiKeys(DEFAULT_SETTINGS));
+          return;
+        }
+
+        const syncStored = syncResult["settings"] as Partial<Settings> | undefined;
+        if (syncStored == null) {
+          resolve(applyEnvApiKeys(DEFAULT_SETTINGS));
+          return;
+        }
+
+        const finalized = finalizeFromPartial(syncStored);
+        chrome.storage.local.set({ settings: stripEnvKeys(finalized) }, () => {
+          if (chrome.runtime.lastError) {
+            logger.warn(
+              "storage",
+              "migrate sync→local write failed",
+              chrome.runtime.lastError.message
+            );
+          } else {
+            logger.log("storage", "migrated settings chrome.storage.sync → local");
+          }
+          resolve(finalized);
+        });
+      });
     });
   });
 }
 
 export async function saveSettings(settings: Settings): Promise<void> {
-  return new Promise((resolve) => {
-    chrome.storage.sync.set({ settings }, resolve);
+  const toStore = stripEnvKeys(settings);
+  return new Promise((resolve, reject) => {
+    chrome.storage.local.set({ settings: toStore }, () => {
+      if (chrome.runtime.lastError) {
+        logger.error("storage", "saveSettings failed", chrome.runtime.lastError.message);
+        reject(new Error(chrome.runtime.lastError.message));
+        return;
+      }
+      resolve();
+    });
   });
 }
 

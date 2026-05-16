@@ -58,16 +58,27 @@ function listChoicesInBlock(
   });
 }
 
-/** Quiz answers are tiny JSON — cap tokens + strict JSON speeds up the model. */
-const QUIZ_AI_MAX_OUTPUT = 896;
+/** Token cap for quiz answers. 1800 comfortably fits ~25 questions with mixed types. */
+const QUIZ_AI_MAX_OUTPUT = 1800;
 
 /** Compact prompt: fewer tokens than JSON.stringify(questions, null, 2). */
 function buildCompactQuizPrompt(questions: QuizQuestion[]): string {
   const n = questions.length;
+
+  // Include page title/headings as subject context so the AI can answer domain questions.
+  const pageTitle = document.title.replace(/\s*[-|·].*$/, "").trim();
+  const h1 = document.querySelector("h1")?.textContent?.trim() ?? "";
+  const subjectHint =
+    [pageTitle, h1].filter(Boolean).join(" — ").slice(0, 200) || "unknown subject";
+
   const lines: string[] = [
+    `Subject: ${subjectHint}`,
     `Return ONLY a JSON object: {"answers":[...]} with exactly ${n} items in order.`,
-    `multiple-choice → one number (0-based option index).`,
-    `checkbox → array of 0-based indices. text → short string answer.`,
+    `Rules:`,
+    `  multiple-choice → single 0-based index (the correct option number).`,
+    `  checkbox → array of 0-based indices for ALL correct options.`,
+    `  text → short string answer.`,
+    `  If unsure, pick the most likely correct option — do NOT skip or leave null.`,
     "",
     "---",
   ];
@@ -103,10 +114,14 @@ function findBlocks(): HTMLElement[] {
     '[data-testid="part-Submission_MultipleChoiceQuestion"]',
     '[data-testid="part-Submission_CheckboxQuestion"]',
     '[data-testid="part-Submission_TextInputQuestion"]',
+    '[data-testid="part-Submission_NumericQuestion"]',
+    '[data-testid="part-Submission_DropdownQuestion"]',
     '[data-testid="part-Submission_ReflectiveQuestion"]',
     '[data-testid="part-Submission_FreeFormTextQuestion"]',
     '[data-testid*="ReflectiveQuestion"]',
     '[data-testid*="FreeForm"]',
+    '[data-testid*="NumericQuestion"]',
+    '[data-testid*="DropdownQuestion"]',
   ];
   for (const sel of tier1Selectors) {
     document.querySelectorAll<HTMLElement>(sel).forEach(add);
@@ -230,17 +245,17 @@ export async function runQuizSolver(
     onStatus(`Parsing quiz page ${page}…`);
 
     const maxPoll = page === 1 ? 12 : 5;
-    let questions = parseQuizPage();
+    let parsed = parseQuizPage();
     let poll = 0;
-    while (questions.length === 0 && poll < maxPoll) {
+    while (parsed.length === 0 && poll < maxPoll) {
       poll++;
       onStatus(`Waiting for questions (${poll}/${maxPoll})…`);
       await dismissCourseraTimedAttemptModal(700);
       await pause(450);
-      questions = parseQuizPage();
+      parsed = parseQuizPage();
     }
 
-    if (questions.length === 0) {
+    if (parsed.length === 0) {
       if (page === 1 && questionsHandledTotal === 0) {
         throw new Error(
           "No quiz questions appeared. Reflections / practice essays are usually opened with Write Assignment, not Solve Quiz."
@@ -250,13 +265,14 @@ export async function runQuizSolver(
       break;
     }
 
-    questionsHandledTotal += questions.length;
+    questionsHandledTotal += parsed.length;
 
+    const questions = parsed.map((p) => p.question);
     onStatus(`Asking AI for ${questions.length} answer(s)…`);
     const answers = await fetchAnswers(questions);
 
     onStatus("Filling answers…");
-    await fillAnswers(questions, answers, settings);
+    await fillAnswers(parsed, answers, settings);
 
     const nextPage = findQuizNextPage();
     if (nextPage) {
@@ -286,8 +302,14 @@ export async function runQuizSolver(
 
 // ─── Parser ───────────────────────────────────────────────────────────────────
 
-function parseQuizPage(): QuizQuestion[] {
-  const questions: QuizQuestion[] = [];
+/** A question paired with the exact DOM block it came from (preserves correct fill targets). */
+interface ParsedQuestion {
+  question: QuizQuestion;
+  block: HTMLElement;
+}
+
+function parseQuizPage(): ParsedQuestion[] {
+  const parsed: ParsedQuestion[] = [];
   const blocks = findBlocks();
 
   logger.log("quizSolver", "findBlocks → DOM containers", {
@@ -300,7 +322,11 @@ function parseQuizPage(): QuizQuestion[] {
 
     const radioInputs = listChoicesInBlock(block, "radio");
     const checkboxInputs = listChoicesInBlock(block, "checkbox");
-    const textInputs = block.querySelectorAll<HTMLInputElement>('input[type="text"], textarea');
+    // Include number inputs and selects alongside text/textarea
+    const textInputs = block.querySelectorAll<HTMLInputElement | HTMLTextAreaElement>(
+      'input[type="text"], input[type="number"], textarea'
+    );
+    const selectInputs = block.querySelectorAll<HTMLSelectElement>("select");
 
     if (radioInputs.length > 0) {
       const optionLabels = getOptionLabels(block);
@@ -312,7 +338,7 @@ function parseQuizPage(): QuizQuestion[] {
           inp.getAttribute("aria-label") ??
           `Option ${i + 1}`,
       }));
-      questions.push({ index: idx, text, type: "multiple-choice", options });
+      parsed.push({ question: { index: parsed.length, text, type: "multiple-choice", options }, block });
     } else if (checkboxInputs.length > 0) {
       const optionLabels = getOptionLabels(block);
       const options = checkboxInputs.map((inp, i) => ({
@@ -323,15 +349,28 @@ function parseQuizPage(): QuizQuestion[] {
           inp.getAttribute("aria-label") ??
           `Option ${i + 1}`,
       }));
-      questions.push({ index: idx, text, type: "checkbox", options });
+      parsed.push({ question: { index: parsed.length, text, type: "checkbox", options }, block });
+    } else if (selectInputs.length > 0) {
+      // Dropdown question — treat options from the <select> element
+      const sel = selectInputs[0];
+      const options = Array.from(sel.options)
+        .filter((o) => o.value !== "" && o.text.trim() !== "")
+        .map((o, i) => ({ index: i, text: o.text.trim() }));
+      parsed.push({ question: { index: parsed.length, text, type: "multiple-choice", options }, block });
     } else if (textInputs.length > 0) {
-      questions.push({ index: idx, text, type: "text", options: [] });
+      parsed.push({ question: { index: parsed.length, text, type: "text", options: [] }, block });
+    } else {
+      logger.warn("quizSolver", "block skipped — no recognizable inputs", {
+        idx,
+        label: blockDebugLabel(block),
+        blockInnerTextPreview: block.innerText?.slice(0, 100) ?? "",
+      });
     }
   });
 
   logger.log("quizSolver", "parseQuizPage → questions extracted", {
-    count: questions.length,
-    questions: questions.map((q) => ({
+    count: parsed.length,
+    questions: parsed.map(({ question: q }) => ({
       index: q.index,
       type: q.type,
       textPreview: q.text.slice(0, 200) + (q.text.length > 200 ? "…" : ""),
@@ -343,7 +382,7 @@ function parseQuizPage(): QuizQuestion[] {
     })),
   });
 
-  return questions;
+  return parsed;
 }
 
 /** Pad / trim so fillAnswers never indexes past the model output. */
@@ -487,47 +526,57 @@ async function fetchAnswers(
 
 // ─── Filler ───────────────────────────────────────────────────────────────────
 
+/**
+ * Fill answers using the exact blocks captured during parsing.
+ * This avoids the index-misalignment bug that occurred when findBlocks() was
+ * called a second time and skipped-question blocks shifted the indices.
+ */
 async function fillAnswers(
-  questions: QuizQuestion[],
+  parsed: ParsedQuestion[],
   answers: AIQuizResponse["answers"],
   settings: Settings
 ): Promise<void> {
-  const blocks = findBlocks();
-
-  if (blocks.length !== questions.length) {
-    logger.warn("quizSolver", "fillAnswers: block count mismatch (re-run findBlocks)", {
-      questionCount: questions.length,
-      blockCount: blocks.length,
-      blockLabels: blocks.map((b, i) => ({ i, label: blockDebugLabel(b) })),
-    });
-  }
-
   logger.log("quizSolver", "fillAnswers → applying to DOM", {
-    pairs: questions.map((q, i) => ({
+    pairs: parsed.map(({ question: q, block }, i) => ({
       i,
       type: q.type,
       answer: answers[i],
-      block: blocks[i] ? blockDebugLabel(blocks[i]!) : "(missing)",
+      block: blockDebugLabel(block),
     })),
   });
 
-  for (let i = 0; i < questions.length; i++) {
-    const q = questions[i];
-    const block = blocks[i];
-    if (!block) continue;
+  for (let i = 0; i < parsed.length; i++) {
+    const { question: q, block } = parsed[i];
     const answer = answers[i];
 
     await pause(settings.delayMs / 4);
 
     if (q.type === "multiple-choice") {
       const idx = typeof answer === "number" ? answer : 0;
+
+      // Try radio buttons first
       const radios = listChoicesInBlock(block, "radio");
-      const target = radios[idx];
-      if (target) {
-        target.dispatchEvent(new MouseEvent("mousedown", { bubbles: true, cancelable: true }));
-        target.dispatchEvent(new MouseEvent("mouseup", { bubbles: true, cancelable: true }));
-        target.click();
-        target.dispatchEvent(new Event("change", { bubbles: true }));
+      if (radios.length > 0) {
+        const target = radios[idx];
+        if (target) {
+          target.dispatchEvent(new MouseEvent("mousedown", { bubbles: true, cancelable: true }));
+          target.dispatchEvent(new MouseEvent("mouseup", { bubbles: true, cancelable: true }));
+          target.click();
+          target.dispatchEvent(new Event("change", { bubbles: true }));
+        }
+      } else {
+        // Fallback: <select> dropdown
+        const sel = block.querySelector<HTMLSelectElement>("select");
+        if (sel) {
+          const validOpts = Array.from(sel.options).filter(
+            (o) => o.value !== "" && o.text.trim() !== ""
+          );
+          const targetOpt = validOpts[idx];
+          if (targetOpt) {
+            sel.value = targetOpt.value;
+            sel.dispatchEvent(new Event("change", { bubbles: true }));
+          }
+        }
       }
     } else if (q.type === "checkbox") {
       const indices: number[] = Array.isArray(answer)
@@ -545,7 +594,7 @@ async function fillAnswers(
     } else if (q.type === "text") {
       const textAnswer = String(answer);
       const input = block.querySelector<HTMLInputElement | HTMLTextAreaElement>(
-        'input[type="text"], textarea'
+        'input[type="text"], input[type="number"], textarea'
       );
       if (input) setReactInput(input, textAnswer);
     }

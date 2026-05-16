@@ -156,6 +156,7 @@ type TestState = "idle" | "testing" | "ok" | "error";
 export function Options() {
   const [settings, setSettings] = useState<Settings>(DEFAULT_SETTINGS);
   const [saved, setSaved] = useState(false);
+  const [saveError, setSaveError] = useState("");
   const [testStates, setTestStates] = useState<Record<AIProvider, TestState>>({
     openai: "idle",
     anthropic: "idle",
@@ -180,9 +181,16 @@ export function Options() {
 
   async function handleSave() {
     logger.log("options", "saveSettings");
-    await saveSettings(settings);
-    setSaved(true);
-    setTimeout(() => setSaved(false), 2500);
+    setSaveError("");
+    try {
+      await saveSettings(settings);
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2500);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      logger.error("options", "saveSettings failed", msg);
+      setSaveError(msg);
+    }
   }
 
   async function handleTest(provider: AIProvider) {
@@ -190,8 +198,11 @@ export function Options() {
     setTestStates((prev) => ({ ...prev, [provider]: "testing" }));
     setTestErrors((prev) => ({ ...prev, [provider]: "" }));
 
-    const tempSettings = settings;
-    await saveSettings(tempSettings);
+    try {
+      await saveSettings(settings);
+    } catch {
+      // best-effort save before test; non-fatal
+    }
 
     const res = await sendToBackground<{
       type: string;
@@ -252,23 +263,30 @@ export function Options() {
             <div style={{ fontSize: "11px", color: C.textMuted }}>Settings & API Keys</div>
           </div>
         </div>
-        <button
-          onClick={handleSave}
-          style={{
-            background: saved ? "#16a34a" : C.accent,
-            border: `1px solid ${saved ? "#15803d" : "#2563eb"}`,
-            borderRadius: "8px",
-            color: "white",
-            cursor: "pointer",
-            fontSize: "13px",
-            fontWeight: 600,
-            padding: "8px 22px",
-            transition: "all 0.2s",
-            boxShadow: saved ? "0 0 12px rgba(22,163,74,0.35)" : "0 0 12px rgba(59,130,246,0.35)",
-          }}
-        >
-          {saved ? "✓ Saved" : "Save Settings"}
-        </button>
+        <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+          {saveError && (
+            <span style={{ fontSize: "11px", color: "#f87171", maxWidth: "220px" }}>
+              ✗ {saveError}
+            </span>
+          )}
+          <button
+            onClick={handleSave}
+            style={{
+              background: saved ? "#16a34a" : saveError ? "#7f1d1d" : C.accent,
+              border: `1px solid ${saved ? "#15803d" : saveError ? "#ef4444" : "#2563eb"}`,
+              borderRadius: "8px",
+              color: "white",
+              cursor: "pointer",
+              fontSize: "13px",
+              fontWeight: 600,
+              padding: "8px 22px",
+              transition: "all 0.2s",
+              boxShadow: saved ? "0 0 12px rgba(22,163,74,0.35)" : "0 0 12px rgba(59,130,246,0.35)",
+            }}
+          >
+            {saved ? "✓ Saved" : saveError ? "Retry Save" : "Save Settings"}
+          </button>
+        </div>
       </div>
 
       {/* ── Body ── */}
@@ -580,12 +598,26 @@ export function Options() {
         </Section>
 
         {/* Footer Save */}
-        <div style={{ display: "flex", justifyContent: "flex-end", paddingBottom: "40px" }}>
+        <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: "8px", paddingBottom: "40px" }}>
+          {saveError && (
+            <div style={{
+              background: "rgba(239,68,68,0.1)",
+              border: "1px solid rgba(239,68,68,0.3)",
+              borderRadius: "7px",
+              color: "#f87171",
+              fontSize: "12px",
+              padding: "8px 12px",
+              maxWidth: "400px",
+              textAlign: "right",
+            }}>
+              Save failed: {saveError}
+            </div>
+          )}
           <button
             onClick={handleSave}
             style={{
-              background: saved ? "#16a34a" : C.accent,
-              border: `1px solid ${saved ? "#15803d" : "#2563eb"}`,
+              background: saved ? "#16a34a" : saveError ? "#7f1d1d" : C.accent,
+              border: `1px solid ${saved ? "#15803d" : saveError ? "#ef4444" : "#2563eb"}`,
               borderRadius: "8px",
               color: "white",
               cursor: "pointer",
@@ -596,7 +628,7 @@ export function Options() {
               boxShadow: saved ? "0 0 12px rgba(22,163,74,0.35)" : "0 0 12px rgba(59,130,246,0.35)",
             }}
           >
-            {saved ? "✓ Saved" : "Save Settings"}
+            {saved ? "✓ Saved" : saveError ? "Retry Save" : "Save Settings"}
           </button>
         </div>
       </div>
