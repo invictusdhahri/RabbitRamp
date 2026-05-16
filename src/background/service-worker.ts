@@ -5,6 +5,7 @@ import { routeAI } from "./ai/router";
 import { testOpenAI } from "./ai/openai";
 import { testAnthropic } from "./ai/anthropic";
 import { testGemini } from "./ai/gemini";
+import { testGroq } from "./ai/groq";
 import {
   initQueueRunner,
   handleQueueSkillStatus,
@@ -141,6 +142,9 @@ chrome.runtime.onMessage.addListener(
                 break;
               case "gemini":
                 await testGemini(cfg.apiKey, cfg.model);
+                break;
+              case "groq":
+                await testGroq(cfg.apiKey, cfg.model);
                 break;
             }
           })

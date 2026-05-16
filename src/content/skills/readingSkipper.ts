@@ -1,16 +1,55 @@
 import { Settings } from "../../shared/types";
+import { getCourseSlug, getItemId, getUserId, callCourseraApi } from "../utils/courseraApi";
+import * as logger from "../../shared/logger";
 
 export async function runReadingSkipper(
   settings: Settings,
   onStatus: (msg: string) => void
 ): Promise<void> {
+  onStatus("Marking reading as complete…");
+
+  const slug = getCourseSlug();
+  const itemId = getItemId();
+  const userId = await getUserId();
+
+  if (slug && itemId && userId) {
+    try {
+      onStatus("Calling Coursera API to mark reading complete…");
+      const res = await callCourseraApi(
+        "POST",
+        "https://www.coursera.org/api/onDemandSupplementCompletions.v1",
+        { id: `${userId}~${itemId}` }
+      );
+      if (res.ok || res.status === 204 || res.status === 201) {
+        logger.log("readingSkipper", "API mark-complete succeeded", { status: res.status });
+        onStatus("Done — reading marked complete via API.");
+        return;
+      }
+      logger.warn(
+        "readingSkipper",
+        `API call returned ${res.status} — falling back to DOM approach`
+      );
+    } catch (err) {
+      logger.warn(
+        "readingSkipper",
+        "API call failed — falling back to DOM approach",
+        err instanceof Error ? err.message : String(err)
+      );
+    }
+  } else {
+    logger.warn("readingSkipper", "Missing slug/itemId/userId — falling back to DOM approach", {
+      slug,
+      itemId,
+      userId,
+    });
+  }
+
+  // ─── DOM fallback ─────────────────────────────────────────────────────────
   onStatus("Scrolling through reading…");
 
   await smoothScrollToBottom();
-
   await delay(settings.delayMs);
 
-  // Try "Mark as complete" button
   const markComplete = findMarkComplete();
   if (markComplete) {
     onStatus("Marking as complete…");
@@ -45,7 +84,6 @@ function findMarkComplete(): HTMLElement | null {
     const el = document.querySelector<HTMLElement>(sel);
     if (el) return el;
   }
-  // Text search fallback
   const buttons = Array.from(document.querySelectorAll<HTMLElement>("button"));
   return (
     buttons.find((b) =>

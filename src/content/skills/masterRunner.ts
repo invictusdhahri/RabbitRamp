@@ -10,6 +10,8 @@ import { runReadingSkipper } from "./readingSkipper";
 import { runQuizSolver } from "./quizSolver";
 import { runAssignmentWriter } from "./assignmentWriter";
 import { runFormFiller } from "./formFiller";
+import { runDiscussionSkipper } from "./discussionSkipper";
+import { runPluginSkipper } from "./pluginSkipper";
 
 export type StatusCallback = (msg: string) => void;
 
@@ -20,6 +22,8 @@ export const ITEM_TYPE_TO_SKILL: Partial<Record<ItemType, SkillType>> = {
   quiz: "quizSolver",
   assignment: "assignmentWriter",
   form: "formFiller",
+  discussion: "discussionSkipper",
+  plugin: "pluginSkipper",
 };
 
 /**
@@ -42,7 +46,11 @@ export async function runSkill(
       return runAssignmentWriter(settings, onStatus);
     case "formFiller":
       return runFormFiller(settings, onStatus);
-  }
+    case "discussionSkipper":
+      return runDiscussionSkipper(settings, onStatus);
+    case "pluginSkipper":
+      return runPluginSkipper(settings, onStatus);
+    }
 }
 
 /**

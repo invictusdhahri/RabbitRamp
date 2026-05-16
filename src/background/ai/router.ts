@@ -3,6 +3,7 @@ import * as logger from "../../shared/logger";
 import { askOpenAI } from "./openai";
 import { askAnthropic } from "./anthropic";
 import { askGemini } from "./gemini";
+import { askGroq } from "./groq";
 
 
 export async function routeAI(
@@ -51,6 +52,9 @@ export async function routeAI(
           break;
         case "gemini":
           text = await askGemini(prompt, cfg.apiKey, cfg.model, fetchOpts);
+          break;
+        case "groq":
+          text = await askGroq(prompt, cfg.apiKey, cfg.model, fetchOpts);
           break;
       }
       logger.log("router", `success via ${provider}`);

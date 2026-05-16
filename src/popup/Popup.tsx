@@ -32,11 +32,13 @@ const C = {
 // ─── Skill colors ─────────────────────────────────────────────────────────────
 
 const SKILL_COLORS: Record<SkillType, { bg: string; border: string; color: string }> = {
-  videoSkipper:     { bg: "rgba(6,182,212,0.16)",   border: "rgba(6,182,212,0.35)",   color: "#22d3ee" },
-  readingSkipper:   { bg: "rgba(234,179,8,0.16)",   border: "rgba(234,179,8,0.35)",   color: "#facc15" },
-  quizSolver:       { bg: "rgba(139,92,246,0.16)",  border: "rgba(139,92,246,0.35)",  color: "#a78bfa" },
-  assignmentWriter: { bg: "rgba(59,130,246,0.16)",  border: "rgba(59,130,246,0.35)",  color: "#93c5fd" },
-  formFiller:       { bg: "rgba(34,197,94,0.16)",   border: "rgba(34,197,94,0.35)",   color: "#86efac" },
+  videoSkipper:       { bg: "rgba(6,182,212,0.16)",   border: "rgba(6,182,212,0.35)",   color: "#22d3ee" },
+  readingSkipper:     { bg: "rgba(234,179,8,0.16)",   border: "rgba(234,179,8,0.35)",   color: "#facc15" },
+  quizSolver:         { bg: "rgba(139,92,246,0.16)",  border: "rgba(139,92,246,0.35)",  color: "#a78bfa" },
+  assignmentWriter:   { bg: "rgba(59,130,246,0.16)",  border: "rgba(59,130,246,0.35)",  color: "#93c5fd" },
+  formFiller:         { bg: "rgba(34,197,94,0.16)",   border: "rgba(34,197,94,0.35)",   color: "#86efac" },
+  discussionSkipper:  { bg: "rgba(236,72,153,0.16)",  border: "rgba(236,72,153,0.35)",  color: "#f472b6" },
+  pluginSkipper:      { bg: "rgba(20,184,166,0.16)",  border: "rgba(20,184,166,0.35)",  color: "#2dd4bf" },
 };
 
 // ─── Skill config ─────────────────────────────────────────────────────────────
@@ -61,14 +63,14 @@ const SKILLS: SkillDef[] = [
     id: "videoSkipper",
     label: "Skip Video",
     icon: "▶",
-    description: "Jump to end & mark complete",
+    description: "Mark video complete via API",
     relevantFor: ["video"],
   },
   {
     id: "readingSkipper",
     label: "Skip Reading",
     icon: "📖",
-    description: "Scroll-complete & mark done",
+    description: "Mark reading complete via API",
     relevantFor: ["reading"],
   },
   {
@@ -92,6 +94,20 @@ const SKILLS: SkillDef[] = [
     description: "AI fills text fields",
     relevantFor: ["form", "unknown"],
   },
+  {
+    id: "discussionSkipper",
+    label: "Skip Discussion",
+    icon: "💬",
+    description: "Post reply via API",
+    relevantFor: ["discussion", "unknown"],
+  },
+  {
+    id: "pluginSkipper",
+    label: "Skip Plugin",
+    icon: "🔌",
+    description: "Mark lab/widget complete via API",
+    relevantFor: ["plugin", "unknown"],
+  },
 ];
 
 const ITEM_ICONS: Record<ItemType, string> = {
@@ -100,6 +116,8 @@ const ITEM_ICONS: Record<ItemType, string> = {
   quiz: "🧠",
   assignment: "✍",
   form: "📝",
+  discussion: "💬",
+  plugin: "🔌",
   unknown: "📄",
 };
 
@@ -108,7 +126,9 @@ const ITEM_TYPE_LABELS: Record<ItemType, string> = {
   reading: "Reading",
   quiz: "Quiz",
   assignment: "Assignment",
-  form: "Discussion",
+  form: "Form",
+  discussion: "Discussion",
+  plugin: "Plugin",
   unknown: "Item",
 };
 
@@ -394,6 +414,9 @@ export function Popup() {
 
   // ─── Derived ──────────────────────────────────────────────────────────────
 
+  const activeProvider = settings.providerPriority.find(
+    (p) => settings.providers[p].enabled && settings.providers[p].apiKey
+  ) ?? null;
   const isCoursera = context?.url?.includes("coursera.org") ?? false;
   const onHomePage = isCourseHomePage(context?.url);
   const hasCourseSlug = !!buildCourseHomeUrl(context?.url);
@@ -454,9 +477,51 @@ export function Popup() {
                 fontSize: "14px",
                 color: C.text,
                 letterSpacing: "0.2px",
+                display: "flex",
+                alignItems: "center",
+                gap: "6px",
               }}
             >
               RabbitRamp
+              {activeProvider && (
+                <span
+                  style={{
+                    fontSize: "9px",
+                    fontWeight: 600,
+                    padding: "2px 5px",
+                    borderRadius: "4px",
+                    background:
+                      activeProvider === "groq"
+                        ? "rgba(249,115,22,0.18)"
+                        : activeProvider === "openai"
+                          ? "rgba(16,163,127,0.18)"
+                          : activeProvider === "anthropic"
+                            ? "rgba(205,110,74,0.18)"
+                            : "rgba(66,133,244,0.18)",
+                    color:
+                      activeProvider === "groq"
+                        ? "#f97316"
+                        : activeProvider === "openai"
+                          ? "#10a37f"
+                          : activeProvider === "anthropic"
+                            ? "#cd6e4a"
+                            : "#4285f4",
+                    textTransform: "uppercase",
+                    letterSpacing: "0.4px",
+                    border: `1px solid ${
+                      activeProvider === "groq"
+                        ? "rgba(249,115,22,0.3)"
+                        : activeProvider === "openai"
+                          ? "rgba(16,163,127,0.3)"
+                          : activeProvider === "anthropic"
+                            ? "rgba(205,110,74,0.3)"
+                            : "rgba(66,133,244,0.3)"
+                    }`,
+                  }}
+                >
+                  {activeProvider === "groq" ? "Groq" : activeProvider}
+                </span>
+              )}
             </div>
             <div style={{ fontSize: "10px", color: C.textMuted, letterSpacing: "0.3px" }}>
               Coursera Autopilot
@@ -885,6 +950,8 @@ function CourseHomePanel({
     form: "rgba(34,197,94,0.14)",
     video: "rgba(6,182,212,0.14)",
     reading: "rgba(234,179,8,0.14)",
+    discussion: "rgba(236,72,153,0.14)",
+    plugin: "rgba(20,184,166,0.14)",
     unknown: "rgba(100,116,139,0.12)",
   };
 
@@ -894,6 +961,8 @@ function CourseHomePanel({
     form: "#86efac",
     video: "#22d3ee",
     reading: "#facc15",
+    discussion: "#f472b6",
+    plugin: "#2dd4bf",
     unknown: "#94a3b8",
   };
 

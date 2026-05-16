@@ -6,7 +6,7 @@ import {
 import * as logger from "./logger";
 
 /** Try order when multiple providers have keys (env + defaults). */
-const PROVIDER_TRY_ORDER: AIProvider[] = ["openai", "anthropic", "gemini"];
+const PROVIDER_TRY_ORDER: AIProvider[] = ["groq", "openai", "anthropic", "gemini"];
 
 function envApiKey(provider: AIProvider): string {
   const raw =
@@ -14,7 +14,9 @@ function envApiKey(provider: AIProvider): string {
       ? import.meta.env.VITE_OPENAI_API_KEY
       : provider === "anthropic"
         ? import.meta.env.VITE_ANTHROPIC_API_KEY
-        : import.meta.env.VITE_GEMINI_API_KEY;
+        : provider === "groq"
+          ? import.meta.env.VITE_GROQ_API_KEY
+          : import.meta.env.VITE_GEMINI_API_KEY;
   return typeof raw === "string" ? raw.trim() : "";
 }
 

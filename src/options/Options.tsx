@@ -37,16 +37,19 @@ const PROVIDER_COLORS: Record<AIProvider, { bg: string; border: string; color: s
   openai:    { bg: "rgba(16,163,127,0.15)",  border: "rgba(16,163,127,0.35)",  color: "#10a37f" },
   anthropic: { bg: "rgba(205,110,74,0.15)",  border: "rgba(205,110,74,0.35)",  color: "#cd6e4a" },
   gemini:    { bg: "rgba(66,133,244,0.15)",  border: "rgba(66,133,244,0.35)",  color: "#4285f4" },
+  groq:      { bg: "rgba(249,115,22,0.15)",  border: "rgba(249,115,22,0.35)",  color: "#f97316" },
 };
 
 // ─── Skill colors ─────────────────────────────────────────────────────────────
 
 const SKILL_COLORS: Record<SkillType, { bg: string; color: string }> = {
-  videoSkipper:     { bg: "rgba(6,182,212,0.14)",   color: "#22d3ee" },
-  readingSkipper:   { bg: "rgba(234,179,8,0.14)",   color: "#facc15" },
-  quizSolver:       { bg: "rgba(139,92,246,0.14)",  color: "#a78bfa" },
-  assignmentWriter: { bg: "rgba(249,115,22,0.14)",  color: "#fdba74" },
-  formFiller:       { bg: "rgba(34,197,94,0.14)",   color: "#86efac" },
+  videoSkipper:       { bg: "rgba(6,182,212,0.14)",   color: "#22d3ee" },
+  readingSkipper:     { bg: "rgba(234,179,8,0.14)",   color: "#facc15" },
+  quizSolver:         { bg: "rgba(139,92,246,0.14)",  color: "#a78bfa" },
+  assignmentWriter:   { bg: "rgba(249,115,22,0.14)",  color: "#fdba74" },
+  formFiller:         { bg: "rgba(34,197,94,0.14)",   color: "#86efac" },
+  discussionSkipper:  { bg: "rgba(236,72,153,0.14)",  color: "#f472b6" },
+  pluginSkipper:      { bg: "rgba(20,184,166,0.14)",  color: "#2dd4bf" },
 };
 
 // ─── Provider logos ───────────────────────────────────────────────────────────
@@ -75,9 +78,18 @@ function GeminiIcon({ size = 18 }: { size?: number }) {
   );
 }
 
+function GroqIcon({ size = 18 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+      <path d="M12 2C6.477 2 2 6.477 2 12s4.477 10 10 10 10-4.477 10-10S17.523 2 12 2zm0 2.5a7.5 7.5 0 1 1 0 15 7.5 7.5 0 0 1 0-15zm1.5 3.5a4 4 0 0 0-4 4v1a4 4 0 0 0 4 4h.5v-2h-.5a2 2 0 0 1-2-2v-1a2 2 0 0 1 2-2h.5v2h1.5V8h-2z" />
+    </svg>
+  );
+}
+
 function ProviderIcon({ provider, size = 16 }: { provider: AIProvider; size?: number }) {
   if (provider === "openai") return <OpenAIIcon size={size} />;
   if (provider === "anthropic") return <AnthropicIcon size={size} />;
+  if (provider === "groq") return <GroqIcon size={size} />;
   return <GeminiIcon size={size} />;
 }
 
@@ -115,14 +127,28 @@ const AI_PROVIDERS: {
     ],
     placeholder: "AIza...",
   },
+  {
+    id: "groq",
+    label: "Groq (Free)",
+    models: [
+      "llama-3.3-70b-versatile",
+      "llama-3.1-70b-versatile",
+      "llama-3.1-8b-instant",
+      "mixtral-8x7b-32768",
+      "gemma2-9b-it",
+    ],
+    placeholder: "gsk_...",
+  },
 ];
 
 const SKILLS: { id: SkillType; label: string; icon: string }[] = [
-  { id: "videoSkipper", label: "Video Skipper", icon: "▶" },
-  { id: "readingSkipper", label: "Reading Skipper", icon: "📖" },
-  { id: "quizSolver", label: "Quiz Solver", icon: "🧠" },
-  { id: "assignmentWriter", label: "Assignment Writer", icon: "✍" },
-  { id: "formFiller", label: "Form Filler", icon: "📝" },
+  { id: "videoSkipper",      label: "Video Skipper",      icon: "▶" },
+  { id: "readingSkipper",    label: "Reading Skipper",    icon: "📖" },
+  { id: "quizSolver",        label: "Quiz Solver",        icon: "🧠" },
+  { id: "assignmentWriter",  label: "Assignment Writer",  icon: "✍" },
+  { id: "formFiller",        label: "Form Filler",        icon: "📝" },
+  { id: "discussionSkipper", label: "Discussion Skipper", icon: "💬" },
+  { id: "pluginSkipper",     label: "Plugin / Lab Skipper", icon: "🔌" },
 ];
 
 type TestState = "idle" | "testing" | "ok" | "error";
@@ -134,11 +160,13 @@ export function Options() {
     openai: "idle",
     anthropic: "idle",
     gemini: "idle",
+    groq: "idle",
   });
   const [testErrors, setTestErrors] = useState<Record<AIProvider, string>>({
     openai: "",
     anthropic: "",
     gemini: "",
+    groq: "",
   });
 
   useEffect(() => {

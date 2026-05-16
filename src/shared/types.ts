@@ -6,6 +6,8 @@ export type ItemType =
   | "quiz"
   | "assignment"
   | "form"
+  | "discussion"
+  | "plugin"
   | "unknown";
 
 export interface CourseContext {
@@ -30,7 +32,9 @@ export type SkillType =
   | "readingSkipper"
   | "quizSolver"
   | "assignmentWriter"
-  | "formFiller";
+  | "formFiller"
+  | "discussionSkipper"
+  | "pluginSkipper";
 
 export type SkillStatus =
   | "idle"
@@ -74,7 +78,7 @@ export interface AIFetchOptions {
 
 // ─── AI Providers ─────────────────────────────────────────────────────────────
 
-export type AIProvider = "openai" | "anthropic" | "gemini";
+export type AIProvider = "openai" | "anthropic" | "gemini" | "groq";
 
 export interface AIProviderConfig {
   provider: AIProvider;
@@ -95,7 +99,7 @@ export interface Settings {
 }
 
 export const DEFAULT_SETTINGS: Settings = {
-  providerPriority: ["openai", "anthropic", "gemini"],
+  providerPriority: ["groq", "openai", "anthropic", "gemini"],
   providers: {
     openai: {
       provider: "openai",
@@ -115,6 +119,12 @@ export const DEFAULT_SETTINGS: Settings = {
       model: "gemini-2.0-flash",
       enabled: false,
     },
+    groq: {
+      provider: "groq",
+      apiKey: "",
+      model: "llama-3.3-70b-versatile",
+      enabled: false,
+    },
   },
   skills: {
     videoSkipper: true,
@@ -122,6 +132,8 @@ export const DEFAULT_SETTINGS: Settings = {
     quizSolver: true,
     assignmentWriter: true,
     formFiller: true,
+    discussionSkipper: true,
+    pluginSkipper: true,
   },
   autoSubmit: true,
   autoNext: true,

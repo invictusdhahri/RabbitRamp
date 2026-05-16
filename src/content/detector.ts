@@ -219,7 +219,14 @@ export function inferItemTypeFromPathname(pathname: string): ItemType {
   ) {
     return "assignment";
   }
-  if (p.includes("/discussionprompt/") || p.includes("/forum/")) return "form";
+  if (p.includes("/discussionprompt/") || p.includes("/forum/")) return "discussion";
+  if (
+    p.includes("/ungradedwidget/") ||
+    p.includes("/ungradedlab/") ||
+    p.includes("/notebook/") ||
+    p.includes("/plugin/")
+  )
+    return "plugin";
   return "unknown";
 }
 

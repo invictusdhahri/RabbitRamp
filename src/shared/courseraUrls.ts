@@ -1,7 +1,14 @@
 /** Shared Coursera URL helpers for popup + background queue orchestration */
 
+/**
+ * Returns true ONLY when the tab is on the full assignments listing page
+ * (/home/assignments). We intentionally do NOT match /home/week/N or other
+ * /home sub-pages — those only show one week at a time and would cause the
+ * Get Degree scrape to run with an incomplete item list, then immediately
+ * navigate to item[0] without ever visiting the full assignments page.
+ */
 export function isCourseHomePage(url?: string): boolean {
-  return /coursera\.org\/learn\/[^/]+\/home/.test(url ?? "");
+  return /coursera\.org\/learn\/[^/]+\/home\/assignments/.test(url ?? "");
 }
 
 /** Extract /learn/{slug}/home/assignments from any coursera.org/learn/{slug}/… URL */

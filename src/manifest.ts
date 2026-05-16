@@ -6,7 +6,7 @@ export default defineManifest({
   short_name: "RabbitRamp",
   version: "1.0.0",
   description:
-    "Skip videos & readings, solve quizzes, write assignments and fill forms on Coursera — powered by OpenAI, Anthropic, and Gemini.",
+    "Skip videos, readings, discussions & plugins, solve quizzes, write assignments on Coursera — powered by Groq, OpenAI, Anthropic, and Gemini.",
   icons: {
     "16": "icons/icon16.png",
     "32": "icons/icon32.png",
@@ -41,6 +41,7 @@ export default defineManifest({
     "https://api.openai.com/*",
     "https://api.anthropic.com/*",
     "https://generativelanguage.googleapis.com/*",
+    "https://api.groq.com/*",
   ],
   permissions: ["storage", "tabs", "activeTab"],
   web_accessible_resources: [
