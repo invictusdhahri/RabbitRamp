@@ -26,9 +26,11 @@ No coding experience required to use it. Just install, add your API key, and go.
 
 Screen recording (~2 min):
 
-<video src="assets/demo-screen-recording.mp4" controls playsinline width="100%">
-  <a href="assets/demo-screen-recording.mp4">Download demo MP4</a>
-</video>
+**GitHub does not render `<video>` embeds in README files**, so use the link below — it opens the MP4 on GitHub’s file viewer, which includes an inline player.
+
+→ **[Play demo video (`demo-screen-recording.mp4`)](assets/demo-screen-recording.mp4)**
+
+(On that page, use the **⋯** menu → **Download** if you want the file locally.)
 
 ## Features
 
