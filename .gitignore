@@ -21,6 +21,9 @@ yarn-error.log*
 .DS_Store
 Thumbs.db
 
+# Local screen recordings (often >100MB — keep demo as assets/*.mp4 only)
+Screen Recording*.mov
+
 # IDE / tooling
 .idea/
 *.swp

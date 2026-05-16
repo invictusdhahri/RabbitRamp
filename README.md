@@ -22,6 +22,14 @@ A Chrome extension that automates Coursera coursework using AI — skip videos a
 
 No coding experience required to use it. Just install, add your API key, and go.
 
+## Demo
+
+Screen recording (~2 min):
+
+<video src="assets/demo-screen-recording.mp4" controls playsinline width="100%">
+  <a href="assets/demo-screen-recording.mp4">Download demo MP4</a>
+</video>
+
 ## Features
 
 | Skill | What it does |
@@ -43,8 +51,9 @@ RabbitRamp routes requests through whichever provider you configure, in priority
 | **OpenAI** | `gpt-4o` | Best overall quality |
 | **Anthropic** | `claude-haiku-4-5-20251001` | Fast and cost-efficient |
 | **Google Gemini** | `gemini-2.0-flash` | Free tier available |
+| **Groq** | `llama-3.3-70b-versatile` | Free tier; OpenAI-compatible API |
 
-API keys are stored locally in Chrome's `sync` storage and are never sent anywhere except the provider's own API endpoint.
+API keys are stored locally in Chrome's extension storage (`chrome.storage.local`) and are never sent anywhere except the provider's own API endpoint.
 
 ---
 
@@ -69,7 +78,7 @@ You have two options:
 **Option A — Extension Settings (recommended)**
 1. Click the RabbitRamp icon in your browser toolbar
 2. Open the **Options** page
-3. Enter your API key for at least one provider (OpenAI, Anthropic, or Gemini) and save
+3. Enter your API key for at least one provider (Groq, OpenAI, Anthropic, or Gemini) and save
 
 **Option B — `.env` file (for developers building from source)**
 Copy `.env.example` to `.env` and fill in your key:
@@ -77,7 +86,7 @@ Copy `.env.example` to `.env` and fill in your key:
 ```env
 VITE_OPENAI_API_KEY=sk-...
 VITE_ANTHROPIC_API_KEY=sk-ant-...
-VITE_GEMINI_API_KEY=...
+VITE_GROQ_API_KEY=gsk_...
 ```
 
 > Keys added via the Options page are stored in your browser and never leave your machine. Keys in `.env` are baked into the build at compile time — never share or distribute a build that contains real keys.
